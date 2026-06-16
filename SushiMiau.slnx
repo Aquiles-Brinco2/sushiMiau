@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/SushiMiau.Shared/SushiMiau.Shared.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/Identity/">
+    <Project Path="src/Services/Identity/SushiMiau.Identity.Api/SushiMiau.Identity.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Inventory/">
+    <Project Path="src/Services/Inventory/SushiMiau.Inventory.Api/SushiMiau.Inventory.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Operations/">
+    <Project Path="src/Services/Operations/SushiMiau.Operations.Api/SushiMiau.Operations.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Sales/">
+    <Project Path="src/Services/Sales/SushiMiau.Sales.Api/SushiMiau.Sales.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Web/">
+    <Project Path="src/Web/SushiMiau.Web/SushiMiau.Web.csproj" />
+  </Folder>
+</Solution>

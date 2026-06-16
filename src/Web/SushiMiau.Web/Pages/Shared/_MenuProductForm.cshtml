@@ -1,0 +1,23 @@
+@model SushiMiau.Web.Pages.MenuModel
+
+<label>Nombre <input asp-for="MenuItem.Name" required /></label>
+<label>Categoria <input asp-for="MenuItem.Category" list="menuCategories" required /></label>
+<button type="button" class="secondary-button" data-dialog-open="#createMenuCategory">Crear categoria</button>
+<label>Precio <input asp-for="MenuItem.Price" type="number" step="0.01" required /></label>
+<label>Preparacion min <input asp-for="MenuItem.PrepMinutes" type="number" min="1" required /></label>
+<label class="check-line"><input asp-for="MenuItem.IsAvailable" /> Disponible</label>
+<div class="toolbar">
+    <strong>Ingredientes aproximados</strong>
+    <button type="button" class="secondary-button" data-dialog-open="#createInventoryFromMenu">Agregar ingrediente al inventario</button>
+</div>
+<div class="line-grid">
+    <input asp-for="MenuItem.Ingredient1Name" list="inventoryItems" placeholder="Ingrediente" />
+    <input asp-for="MenuItem.Ingredient1Quantity" type="number" step="0.01" placeholder="Cant." />
+    <span></span>
+    <input asp-for="MenuItem.Ingredient2Name" list="inventoryItems" placeholder="Ingrediente" />
+    <input asp-for="MenuItem.Ingredient2Quantity" type="number" step="0.01" placeholder="Cant." />
+    <span></span>
+    <input asp-for="MenuItem.Ingredient3Name" list="inventoryItems" placeholder="Ingrediente" />
+    <input asp-for="MenuItem.Ingredient3Quantity" type="number" step="0.01" placeholder="Cant." />
+    <span></span>
+</div>

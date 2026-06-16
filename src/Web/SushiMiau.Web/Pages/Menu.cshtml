@@ -1,0 +1,110 @@
+@page
+@model MenuModel
+@{
+    ViewData["Title"] = "Menu";
+}
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Menu</p>
+        <h1>Carta administrativa</h1>
+        <p class="muted">Productos con categoria, disponibilidad y receta aproximada de inventario.</p>
+    </div>
+    <button type="button" data-dialog-open="#createProduct">Nuevo producto</button>
+</section>
+
+<section class="panel">
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Producto</th><th>Categoria</th><th>Precio</th><th>Disponibilidad</th><th>Ingredientes</th><th>Accion</th></tr></thead>
+            <tbody>
+            @foreach (var item in Model.Items)
+            {
+                <tr>
+                    <td><strong>@item.Name</strong><br /><span class="muted">@item.PrepMinutes min</span></td>
+                    <td>@item.Category</td>
+                    <td>Bs @item.Price.ToString("0.00")</td>
+                    <td><span class="badge @(item.IsAvailable ? "ok" : "off")">@(item.IsAvailable ? "Disponible" : "Pausado")</span></td>
+                    <td>@string.Join(", ", item.Ingredients.Select(i => $"{i.Quantity:0.##} {i.Unit} {i.InventoryItemName}"))</td>
+                    <td><button type="button" class="secondary-button" data-dialog-open="#edit-@item.ItemId">Editar</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<dialog id="createProduct">
+    <div class="dialog-head"><h2>Nuevo producto</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="Create" class="dialog-body form-box">
+        <partial name="_MenuProductForm" model="Model" />
+        <button type="submit">Guardar producto</button>
+    </form>
+</dialog>
+
+@foreach (var item in Model.Items)
+{
+    var i1 = item.Ingredients.ElementAtOrDefault(0);
+    var i2 = item.Ingredients.ElementAtOrDefault(1);
+    var i3 = item.Ingredients.ElementAtOrDefault(2);
+    <dialog id="edit-@item.ItemId">
+        <div class="dialog-head"><h2>Editar producto</h2><button type="button" data-dialog-close>x</button></div>
+        <form method="post" asp-page-handler="Update" class="dialog-body form-box">
+            <input type="hidden" asp-for="MenuItem.ItemId" value="@item.ItemId" />
+            <label>Nombre <input asp-for="MenuItem.Name" value="@item.Name" required /></label>
+            <label>Categoria <input asp-for="MenuItem.Category" value="@item.Category" list="menuCategories" required /></label>
+            <label>Precio <input asp-for="MenuItem.Price" value="@item.Price" type="number" step="0.01" required /></label>
+            <label>Preparacion min <input asp-for="MenuItem.PrepMinutes" value="@item.PrepMinutes" type="number" min="1" required /></label>
+            <label class="check-line"><input asp-for="MenuItem.IsAvailable" checked="@item.IsAvailable" /> Disponible</label>
+            <div class="line-grid">
+                <input asp-for="MenuItem.Ingredient1Name" value="@i1?.InventoryItemName" list="inventoryItems" placeholder="Ingrediente" />
+                <input asp-for="MenuItem.Ingredient1Quantity" value="@i1?.Quantity" type="number" step="0.01" placeholder="Cant." />
+                <span class="muted">@i1?.Unit</span>
+                <input asp-for="MenuItem.Ingredient2Name" value="@i2?.InventoryItemName" list="inventoryItems" placeholder="Ingrediente" />
+                <input asp-for="MenuItem.Ingredient2Quantity" value="@i2?.Quantity" type="number" step="0.01" placeholder="Cant." />
+                <span class="muted">@i2?.Unit</span>
+                <input asp-for="MenuItem.Ingredient3Name" value="@i3?.InventoryItemName" list="inventoryItems" placeholder="Ingrediente" />
+                <input asp-for="MenuItem.Ingredient3Quantity" value="@i3?.Quantity" type="number" step="0.01" placeholder="Cant." />
+                <span class="muted">@i3?.Unit</span>
+            </div>
+            <button type="submit">Guardar cambios</button>
+        </form>
+    </dialog>
+}
+
+<dialog id="createMenuCategory">
+    <div class="dialog-head"><h2>Nueva categoria</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="Category" class="dialog-body form-box">
+        <label>Nombre <input asp-for="Category.Name" required /></label>
+        <button type="submit">Crear categoria</button>
+    </form>
+</dialog>
+
+<dialog id="createInventoryFromMenu">
+    <div class="dialog-head"><h2>Nuevo ingrediente</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="Ingredient" class="dialog-body form-box">
+        <label>Nombre <input asp-for="Ingredient.Name" required /></label>
+        <label>Categoria <input asp-for="Ingredient.Category" required /></label>
+        <label>Unidad <input asp-for="Ingredient.Unit" list="units" required /></label>
+        <label>Stock <input asp-for="Ingredient.Stock" type="number" step="0.01" required /></label>
+        <label>Minimo <input asp-for="Ingredient.MinimumStock" type="number" step="0.01" required /></label>
+        <label>Proveedor <input asp-for="Ingredient.Supplier" required /></label>
+        <button type="submit">Crear ingrediente</button>
+    </form>
+</dialog>
+
+<datalist id="menuCategories">
+    @foreach (var category in Model.Categories)
+    {
+        <option value="@category.Name"></option>
+    }
+</datalist>
+<datalist id="inventoryItems">
+    @foreach (var ingredient in Model.InventoryItems)
+    {
+        <option value="@ingredient.Name"></option>
+    }
+</datalist>
+<datalist id="units"><option value="kg"></option><option value="g"></option><option value="unidad"></option><option value="paquete"></option><option value="litro"></option><option value="ml"></option></datalist>

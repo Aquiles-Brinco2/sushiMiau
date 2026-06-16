@@ -1,0 +1,88 @@
+@page
+@model ReportesModel
+@{
+    ViewData["Title"] = "Reportes";
+}
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Reportes</p>
+        <h1>Resumen administrativo</h1>
+        <p class="muted">Indicadores internos para dueños y gerencia.</p>
+    </div>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert danger">@Model.ErrorMessage</div>
+}
+
+<section class="metric-grid">
+    <article class="metric-card"><span>Ventas</span><strong>Bs @Model.Report.SalesTotal.ToString("0.00")</strong><small>@Model.Report.PaidOrders pedidos pagados</small></article>
+    <article class="metric-card"><span>Facturado</span><strong>Bs @Model.Report.InvoicedTotal.ToString("0.00")</strong><small>Facturacion del dia</small></article>
+    <article class="metric-card"><span>Delivery</span><strong>@Model.Report.OpenDeliveryOrders</strong><small>@Model.Report.DeliveryOrders pedidos totales</small></article>
+    <article class="metric-card"><span>Reservas</span><strong>@Model.Report.OpenReservations</strong><small>@Model.Report.Reservations reservas totales</small></article>
+    <article class="metric-card"><span>Stock bajo</span><strong>@Model.Report.LowStockItems</strong><small>Alertas de inventario</small></article>
+    <article class="metric-card"><span>Personal activo</span><strong>@Model.Report.ActiveStaff</strong><small>Turnos activos</small></article>
+</section>
+
+<section class="workspace-grid">
+    <div class="panel">
+        <div class="panel-heading"><h2>Alertas de inventario</h2></div>
+        <div class="shift-list">
+            @foreach (var item in Model.StockAlerts)
+            {
+                <article><strong>@item.Name</strong><span>@item.Stock.ToString("0.##") @item.Unit / minimo @item.MinimumStock.ToString("0.##")</span><small>@item.Supplier</small></article>
+            }
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-heading"><h2>Delivery pendiente</h2></div>
+        <div class="shift-list">
+            @foreach (var order in Model.DeliveryOrders.Where(order => order.DeliveryStatus != "Entregado"))
+            {
+                <article><strong>@order.CustomerName</strong><span>@order.DeliveryStatus</span><small>Bs @order.Total.ToString("0.00")</small></article>
+            }
+        </div>
+    </div>
+
+    <div class="panel wide">
+        <div class="panel-heading"><h2>Reservas activas</h2></div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Hora</th><th>Cliente</th><th>Personas</th><th>Estado</th></tr></thead>
+                <tbody>
+                @foreach (var reservation in Model.Reservations.Where(reservation => reservation.Status != "Cancelada"))
+                {
+                    <tr>
+                        <td>@reservation.ReservationTime.ToLocalTime().ToString("HH:mm")</td>
+                        <td>@reservation.CustomerName</td>
+                        <td>@reservation.PartySize</td>
+                        <td><span class="badge">@reservation.Status</span></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel wide">
+        <div class="panel-heading"><h2>Ventas por plato</h2></div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Plato</th><th>Cantidad</th><th>Total vendido</th></tr></thead>
+                <tbody>
+                @foreach (var metric in Model.DishMetrics)
+                {
+                    <tr>
+                        <td><strong>@metric.ItemName</strong></td>
+                        <td>@metric.Quantity</td>
+                        <td>Bs @metric.Total.ToString("0.00")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>

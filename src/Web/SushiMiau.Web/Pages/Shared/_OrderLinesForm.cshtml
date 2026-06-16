@@ -1,0 +1,10 @@
+@model SushiMiau.Web.Pages.PedidosModel
+
+<div class="line-grid">
+    <input asp-for="TableOrder.Item1Name" list="menuItems" placeholder="Producto" required />
+    <input asp-for="TableOrder.Item1Quantity" type="number" min="1" placeholder="Cant." required />
+    <input asp-for="TableOrder.Item1Price" type="number" step="0.01" placeholder="Precio" required />
+    <input asp-for="TableOrder.Item2Name" list="menuItems" placeholder="Producto opcional" />
+    <input asp-for="TableOrder.Item2Quantity" type="number" min="0" placeholder="Cant." />
+    <input asp-for="TableOrder.Item2Price" type="number" step="0.01" placeholder="Precio" />
+</div>

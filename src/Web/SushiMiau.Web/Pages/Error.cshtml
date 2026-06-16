@@ -1,0 +1,20 @@
+@page
+@model ErrorModel
+@{
+    ViewData["Title"] = "No se pudo completar";
+}
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Sistema</p>
+        <h1>No se pudo completar la operacion</h1>
+        <p class="muted">Revisa que los microservicios y Cassandra esten activos. Si el problema continua, intenta nuevamente desde el modulo correspondiente.</p>
+    </div>
+</section>
+
+@if (Model.ShowRequestId)
+{
+    <div class="alert danger">Referencia tecnica: @Model.RequestId</div>
+}
+
+<a class="secondary-button" asp-page="/Index">Volver al panel</a>

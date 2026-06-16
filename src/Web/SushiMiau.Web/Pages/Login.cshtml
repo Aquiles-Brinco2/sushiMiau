@@ -1,0 +1,26 @@
+@page
+@model LoginModel
+@{
+    ViewData["Title"] = "Iniciar sesion";
+}
+
+<section class="login-shell">
+    <form method="post" class="login-panel">
+        <div>
+            <p class="eyebrow">Acceso interno</p>
+            <h1>Sushi Miau</h1>
+            <p class="muted">Gestion administrativa del restaurante.</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+        {
+            <div class="alert danger">@Model.ErrorMessage</div>
+        }
+
+        <label>Usuario <input asp-for="Credentials.Username" autocomplete="username" required /></label>
+        <label>Clave <input asp-for="Credentials.Password" type="password" autocomplete="current-password" required /></label>
+        <button type="submit">Entrar</button>
+
+        <p class="muted small">Usuario inicial: admin / Admin123!</p>
+    </form>
+</section>

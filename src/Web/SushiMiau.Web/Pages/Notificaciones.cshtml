@@ -1,0 +1,66 @@
+@page
+@model NotificacionesModel
+@{
+    ViewData["Title"] = "Notificaciones";
+}
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Notificaciones</p>
+        <h1>Comunicados internos</h1>
+        <p class="muted">Avisos por rol para coordinar la operacion diaria.</p>
+    </div>
+    <button type="button" data-dialog-open="#createNotification">Nueva notificacion</button>
+</section>
+
+<section class="workspace-grid">
+    <div class="panel wide">
+        <div class="panel-heading">
+            <h2>Mensajes para @Model.SelectedRole</h2>
+            <form method="get" class="filter-form">
+                <input name="role" list="roles" value="@Model.SelectedRole" />
+                @* datalist below keeps role options filterable while typing *@
+                @*
+                    @foreach (var role in Model.Roles)
+                    {
+                        <option value="@role" selected="@(role == Model.SelectedRole)">@role</option>
+                    }
+                *@
+                <button type="submit">Ver</button>
+            </form>
+        </div>
+        <div class="ticket-stack">
+            @foreach (var notification in Model.Notifications)
+            {
+                <article class="ticket severity-@notification.Severity.ToLowerInvariant()">
+                    <header><strong>@notification.Title</strong><span class="badge">@notification.Severity</span></header>
+                    <p>@notification.Message</p>
+                    <small>@notification.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+                </article>
+            }
+        </div>
+    </div>
+
+</section>
+
+<dialog id="createNotification">
+    <div class="dialog-head"><h2>Nueva notificacion</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" class="dialog-body form-box">
+        <h2>Nueva notificacion</h2>
+        <label>Rol <input asp-for="Notification.AudienceRole" list="roles" required /></label>
+        <label>Titulo <input asp-for="Notification.Title" required /></label>
+        <label>Mensaje <textarea asp-for="Notification.Message" rows="4" required></textarea></label>
+        <label>Severidad <input asp-for="Notification.Severity" list="severities" required /></label>
+        <button type="submit">Publicar</button>
+    </form>
+</dialog>
+
+<datalist id="roles">
+    @foreach (var role in Model.Roles)
+    {
+        <option value="@role"></option>
+    }
+</datalist>
+<datalist id="severities"><option value="Baja"></option><option value="Media"></option><option value="Alta"></option></datalist>

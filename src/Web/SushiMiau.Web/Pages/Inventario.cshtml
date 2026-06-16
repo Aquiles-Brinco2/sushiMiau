@@ -1,0 +1,95 @@
+@page
+@model InventarioModel
+@{
+    ViewData["Title"] = "Inventario";
+}
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Inventario</p>
+        <h1>Insumos y stock</h1>
+        <p class="muted">Control de ingredientes, empaques, proveedores y reposicion.</p>
+    </div>
+    <button type="button" data-dialog-open="#createIngredient">Nuevo ingrediente</button>
+</section>
+
+<section class="metric-grid">
+    <article class="metric-card"><span>Items</span><strong>@Model.Snapshot.TotalItems</strong><small>Total controlado</small></article>
+    <article class="metric-card"><span>Bajo minimo</span><strong>@Model.Snapshot.LowStockItems</strong><small>Requieren compra</small></article>
+    <article class="metric-card"><span>Unidades</span><strong>@Model.Snapshot.TotalStockUnits.ToString("0.##")</strong><small>Stock acumulado</small></article>
+</section>
+
+<section class="workspace-grid">
+    <div class="panel wide">
+        <div class="panel-heading"><h2>Inventario actual</h2></div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Item</th><th>Categoria</th><th>Stock</th><th>Minimo</th><th>Proveedor</th><th>Accion</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Items)
+                {
+                    <tr class="@(item.IsLowStock ? "stock-low" : item.Stock >= item.MinimumStock * 2 ? "stock-high" : "stock-watch")">
+                        <td><strong>@item.Name</strong> @if (item.IsLowStock) { <span class="badge alert-badge">Reponer</span> }</td>
+                        <td>@item.Category</td>
+                        <td>@item.Stock.ToString("0.##") @item.Unit</td>
+                        <td>@item.MinimumStock.ToString("0.##") @item.Unit</td>
+                        <td>@item.Supplier</td>
+                        <td>
+                            <button type="button" class="secondary-button" data-dialog-open="#notify-@item.ItemId">Notificar</button>
+                            <dialog id="notify-@item.ItemId">
+                                <div class="dialog-head"><h2>Nueva notificacion</h2><button type="button" data-dialog-close>x</button></div>
+                                <form method="post" asp-page-handler="Notify" class="dialog-body form-box">
+                                    <input type="hidden" asp-for="Notification.Title" value="Inventario: @item.Name" />
+                                    <input type="hidden" asp-for="Notification.Message" value="Revisar stock de @item.Name. Actual: @item.Stock.ToString("0.##") @item.Unit." />
+                                    <label>Rol <input asp-for="Notification.AudienceRole" list="roles" value="Gerente" required /></label>
+                                    <label>Severidad <input asp-for="Notification.Severity" list="severities" value="Media" required /></label>
+                                    <button type="submit">Crear notificacion</button>
+                                </form>
+                            </dialog>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<dialog id="createIngredient">
+    <div class="dialog-head"><h2>Nuevo ingrediente</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="Ingredient" class="dialog-body form-box">
+        <label>Nombre <input asp-for="Ingredient.Name" required /></label>
+        <label>Categoria <input asp-for="Ingredient.Category" list="inventoryCategories" required /></label>
+        <button type="button" class="secondary-button" data-dialog-open="#createInventoryCategory">Crear categoria</button>
+        <label>Unidad <input asp-for="Ingredient.Unit" list="units" required /></label>
+        <label>Stock <input asp-for="Ingredient.Stock" type="number" step="0.01" required /></label>
+        <label>Minimo <input asp-for="Ingredient.MinimumStock" type="number" step="0.01" required /></label>
+        <label>Proveedor <input asp-for="Ingredient.Supplier" required /></label>
+        <button type="submit">Guardar</button>
+    </form>
+</dialog>
+
+<dialog id="createInventoryCategory">
+    <div class="dialog-head"><h2>Nueva categoria</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="Category" class="dialog-body form-box">
+        <label>Nombre <input asp-for="Category.Name" required /></label>
+        <button type="submit">Crear categoria</button>
+    </form>
+</dialog>
+
+<datalist id="inventoryCategories">
+    @foreach (var category in Model.Categories)
+    {
+        <option value="@category.Name"></option>
+    }
+</datalist>
+<datalist id="units">
+    @foreach (var unit in Model.Units)
+    {
+        <option value="@unit"></option>
+    }
+</datalist>
+<datalist id="roles"><option value="Gerente"></option><option value="Inventario"></option><option value="Administrador"></option></datalist>
+<datalist id="severities"><option value="Baja"></option><option value="Media"></option><option value="Alta"></option></datalist>

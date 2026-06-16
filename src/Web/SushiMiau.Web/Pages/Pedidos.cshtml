@@ -1,0 +1,106 @@
+@page
+@model PedidosModel
+@{
+    ViewData["Title"] = "Pedidos";
+}
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Pedidos</p>
+        <h1>Mesas y delivery</h1>
+        <p class="muted">Registro interno de pedidos. Al crear un pedido se descuenta inventario aproximado segun receta.</p>
+    </div>
+    <div class="toolbar">
+        <button type="button" data-dialog-open="#createTableOrder">Pedido de mesa</button>
+        <button type="button" data-dialog-open="#createDeliveryOrder">Pedido delivery</button>
+    </div>
+</section>
+
+<section class="workspace-grid">
+    <div class="panel wide">
+        <div class="panel-heading"><h2>Pedidos de mesa</h2></div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Mesa</th><th>Operador</th><th>Items</th><th>Total</th><th>Estado</th></tr></thead>
+                <tbody>
+                @foreach (var order in Model.TableOrders)
+                {
+                    <tr>
+                        <td><strong>@order.TableOrChannel</strong></td>
+                        <td>@order.ServerName</td>
+                        <td>@string.Join(", ", order.Lines.Select(line => $"{line.Quantity}x {line.ItemName}"))</td>
+                        <td>Bs @order.Total.ToString("0.00")</td>
+                        <td><span class="badge @(order.Status == "Pagado" ? "ok" : "alert-badge")">@order.Status</span></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel wide">
+        <div class="panel-heading"><h2>Delivery</h2></div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Cliente</th><th>Direccion</th><th>Items</th><th>Total</th><th>Entrega</th><th>Accion</th></tr></thead>
+                <tbody>
+                @foreach (var order in Model.Orders)
+                {
+                    <tr>
+                        <td><strong>@order.CustomerName</strong><br /><span class="muted">@order.CustomerPhone</span></td>
+                        <td>@order.DeliveryAddress</td>
+                        <td>@string.Join(", ", order.Lines.Select(line => $"{line.Quantity}x {line.ItemName}"))</td>
+                        <td>Bs @order.Total.ToString("0.00")</td>
+                        <td><span class="badge">@order.DeliveryStatus</span></td>
+                        <td>
+                            <form method="post" asp-page-handler="Status" class="inline-actions">
+                                <input type="hidden" asp-for="DeliveryStatus.OrderId" value="@order.OrderId" />
+                                <button name="DeliveryStatus.DeliveryStatus" value="En preparacion" type="submit">Preparar</button>
+                                <button name="DeliveryStatus.DeliveryStatus" value="En ruta" type="submit">En ruta</button>
+                                <button name="DeliveryStatus.DeliveryStatus" value="Entregado" type="submit">Entregado</button>
+                            </form>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<dialog id="createTableOrder">
+    <div class="dialog-head"><h2>Pedido de mesa</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="CreateTable" class="dialog-body form-box">
+        <label>Mesa <input asp-for="TableOrder.TableOrChannel" placeholder="Mesa 4" required /></label>
+        <label>Operador <input asp-for="TableOrder.ServerName" required /></label>
+        <partial name="_OrderLinesForm" model="Model" />
+        <button type="submit">Registrar pedido</button>
+    </form>
+</dialog>
+
+<dialog id="createDeliveryOrder">
+    <div class="dialog-head"><h2>Pedido delivery</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="Create" class="dialog-body form-box">
+        <label>Cliente <input asp-for="DeliveryOrder.CustomerName" list="customers" required /></label>
+        <label>Telefono <input asp-for="DeliveryOrder.CustomerPhone" required /></label>
+        <label>Direccion <input asp-for="DeliveryOrder.DeliveryAddress" required /></label>
+        <label>Operador <input asp-for="DeliveryOrder.ServerName" required /></label>
+        <partial name="_DeliveryLinesForm" model="Model" />
+        <button type="submit">Registrar delivery</button>
+    </form>
+</dialog>
+
+<datalist id="menuItems">
+    @foreach (var item in Model.Menu)
+    {
+        <option value="@item.Name"></option>
+    }
+</datalist>
+<datalist id="customers">
+    @foreach (var customer in Model.Customers)
+    {
+        <option value="@customer.Name"></option>
+    }
+</datalist>

@@ -1,0 +1,6 @@
+@SushiMiau.Inventory.Api_HostAddress = http://localhost:5158
+
+GET {{SushiMiau.Inventory.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

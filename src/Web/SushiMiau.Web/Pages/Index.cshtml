@@ -1,0 +1,50 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Panel";
+}
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Back office</p>
+        <h1>Sushi Miau Gestion</h1>
+        <p class="muted">Panel interno para administracion, operacion y control del restaurante.</p>
+    </div>
+    <div class="service-chip">Cassandra + microservicios .NET</div>
+</section>
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="metric-grid" aria-label="Resumen del dia">
+    <article class="metric-card">
+        <span>Ventas cobradas</span>
+        <strong>Bs @Model.Dashboard.Sales.Total.ToString("0.00")</strong>
+        <small>@Model.Dashboard.Sales.PaidOrders de @Model.Dashboard.Sales.Orders pedidos pagados</small>
+    </article>
+    <article class="metric-card">
+        <span>Facturado</span>
+        <strong>Bs @Model.Dashboard.Sales.InvoicedTotal.ToString("0.00")</strong>
+        <small>Facturacion del dia</small>
+    </article>
+    <article class="metric-card">
+        <span>Reservas</span>
+        <strong>@Model.Dashboard.Reservations.Count</strong>
+        <small>Agenda de hoy</small>
+    </article>
+    <article class="metric-card">
+        <span>Alertas de stock</span>
+        <strong>@Model.Dashboard.Inventory.LowStockItems</strong>
+        <small>@Model.Dashboard.Inventory.TotalItems ingredientes controlados</small>
+    </article>
+</section>
+
+<section class="module-grid">
+    <a class="module-card" asp-page="/Usuarios"><strong>Usuarios/autenticacion y roles</strong><span>Administracion de accesos internos.</span></a>
+    <a class="module-card" asp-page="/Menu"><strong>Menu</strong><span>Carta operativa para sala y delivery.</span></a>
+    <a class="module-card" asp-page="/Reservas"><strong>Reservas</strong><span>Agenda de mesas gestionada por el personal.</span></a>
+    <a class="module-card" asp-page="/Pedidos"><strong>Pedidos delivery</strong><span>Pedidos de reparto y estados de entrega.</span></a>
+    <a class="module-card" asp-page="/Inventario"><strong>Inventario</strong><span>Stock, proveedores y movimientos.</span></a>
+    <a class="module-card" asp-page="/Pagos"><strong>Pagos y facturacion</strong><span>Cobros, pagos y facturas emitidas.</span></a>
+    <a class="module-card" asp-page="/Notificaciones"><strong>Notificaciones</strong><span>Mensajes internos por rol.</span></a>
+    <a class="module-card" asp-page="/Reportes"><strong>Reportes</strong><span>Indicadores administrativos.</span></a>
+</section>

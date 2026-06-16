@@ -1,0 +1,77 @@
+@page
+@model UsuariosModel
+@{
+    ViewData["Title"] = "Usuarios";
+}
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Administracion</p>
+        <h1>Usuarios y roles</h1>
+        <p class="muted">Solo administradores pueden crear, activar o cambiar roles.</p>
+    </div>
+    <button type="button" data-dialog-open="#createUser">Nuevo usuario</button>
+</section>
+
+<section class="workspace-grid">
+    <div class="panel wide">
+        <div class="panel-heading"><h2>Usuarios</h2></div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Actualizar</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var user in Model.Users)
+                {
+                    <tr>
+                        <td><strong>@user.FullName</strong></td>
+                        <td>@user.Username</td>
+                        <td>@user.Role</td>
+                        <td><span class="badge @(user.IsActive ? "ok" : "off")">@(user.IsActive ? "Activo" : "Inactivo")</span></td>
+                        <td><button type="button" class="secondary-button" data-dialog-open="#edit-@user.UserId">Acciones</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</section>
+
+<dialog id="createUser">
+    <div class="dialog-head"><h2>Nuevo usuario</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="Create" class="dialog-body form-box">
+        <h2>Nuevo usuario</h2>
+        <label>Nombre <input asp-for="UserForm.FullName" required /></label>
+        <label>Usuario <input asp-for="UserForm.Username" required /></label>
+        <label>Clave <input asp-for="UserForm.Password" type="password" required /></label>
+        <label>Rol <input asp-for="UserForm.Role" list="roles" required /></label>
+        <label class="check-line"><input asp-for="UserForm.IsActive" /> Activo</label>
+        <button type="submit">Crear usuario</button>
+    </form>
+</dialog>
+
+@foreach (var user in Model.Users)
+{
+    <dialog id="edit-@user.UserId">
+        <div class="dialog-head"><h2>Acciones de usuario</h2><button type="button" data-dialog-close>x</button></div>
+        <form method="post" asp-page-handler="Update" class="dialog-body form-box" data-confirm="Esta seguro?">
+            <input type="hidden" asp-for="UserUpdate.UserId" value="@user.UserId" />
+            <label>Nombre <input asp-for="UserUpdate.FullName" value="@user.FullName" required /></label>
+            <label>Rol <input asp-for="UserUpdate.Role" value="@user.Role" list="roles" required /></label>
+            <label class="check-line"><input asp-for="UserUpdate.IsActive" checked="@user.IsActive" /> Activo</label>
+            <label>Nueva clave <input asp-for="UserUpdate.Password" placeholder="Opcional" /></label>
+            <button type="submit">Guardar cambios</button>
+        </form>
+    </dialog>
+}
+
+<datalist id="roles">
+    @foreach (var role in Model.Roles)
+    {
+        <option value="@role"></option>
+    }
+</datalist>

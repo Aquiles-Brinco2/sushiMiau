@@ -1,0 +1,111 @@
+services:
+  cassandra:
+    image: cassandra:4.1
+    container_name: sushi-miau-cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      CASSANDRA_CLUSTER_NAME: SushiMiauCluster
+      CASSANDRA_DC: datacenter1
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+      MAX_HEAP_SIZE: 512M
+      HEAP_NEWSIZE: 128M
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 45s
+
+  inventory-api:
+    build:
+      context: .
+      args:
+        PROJECT_PATH: src/Services/Inventory/SushiMiau.Inventory.Api/SushiMiau.Inventory.Api.csproj
+        PROJECT_DLL: SushiMiau.Inventory.Api.dll
+    ports:
+      - "5201:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Cassandra__ContactPoints__0: cassandra
+      Cassandra__Port: 9042
+      Cassandra__Keyspace: sushi_miau
+    depends_on:
+      cassandra:
+        condition: service_healthy
+
+  identity-api:
+    build:
+      context: .
+      args:
+        PROJECT_PATH: src/Services/Identity/SushiMiau.Identity.Api/SushiMiau.Identity.Api.csproj
+        PROJECT_DLL: SushiMiau.Identity.Api.dll
+    ports:
+      - "5204:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Cassandra__ContactPoints__0: cassandra
+      Cassandra__Port: 9042
+      Cassandra__Keyspace: sushi_miau
+    depends_on:
+      cassandra:
+        condition: service_healthy
+
+  operations-api:
+    build:
+      context: .
+      args:
+        PROJECT_PATH: src/Services/Operations/SushiMiau.Operations.Api/SushiMiau.Operations.Api.csproj
+        PROJECT_DLL: SushiMiau.Operations.Api.dll
+    ports:
+      - "5202:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Cassandra__ContactPoints__0: cassandra
+      Cassandra__Port: 9042
+      Cassandra__Keyspace: sushi_miau
+    depends_on:
+      cassandra:
+        condition: service_healthy
+
+  sales-api:
+    build:
+      context: .
+      args:
+        PROJECT_PATH: src/Services/Sales/SushiMiau.Sales.Api/SushiMiau.Sales.Api.csproj
+        PROJECT_DLL: SushiMiau.Sales.Api.dll
+    ports:
+      - "5203:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Cassandra__ContactPoints__0: cassandra
+      Cassandra__Port: 9042
+      Cassandra__Keyspace: sushi_miau
+    depends_on:
+      cassandra:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      args:
+        PROJECT_PATH: src/Web/SushiMiau.Web/SushiMiau.Web.csproj
+        PROJECT_DLL: SushiMiau.Web.dll
+    ports:
+      - "5200:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ServiceUrls__Identity: http://identity-api:8080
+      ServiceUrls__Inventory: http://inventory-api:8080
+      ServiceUrls__Operations: http://operations-api:8080
+      ServiceUrls__Sales: http://sales-api:8080
+    depends_on:
+      - identity-api
+      - inventory-api
+      - operations-api
+      - sales-api
+
+volumes:
+  cassandra-data:

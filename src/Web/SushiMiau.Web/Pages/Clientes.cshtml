@@ -1,0 +1,45 @@
+@page
+@model ClientesModel
+@{
+    ViewData["Title"] = "Clientes";
+}
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Clientes</p>
+        <h1>Clientes registrados</h1>
+        <p class="muted">Datos mínimos para reservas, pedidos y facturación.</p>
+    </div>
+    <button type="button" data-dialog-open="#createCustomer">Registrar cliente</button>
+</section>
+
+<section class="panel">
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Nombre</th><th>Telefono</th><th>NIT/CI</th><th>Creado</th></tr></thead>
+            <tbody>
+            @foreach (var customer in Model.Customers)
+            {
+                <tr>
+                    <td><strong>@customer.Name</strong></td>
+                    <td>@customer.Phone</td>
+                    <td>@customer.Nit</td>
+                    <td>@customer.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<dialog id="createCustomer">
+    <div class="dialog-head"><h2>Registrar cliente</h2><button type="button" data-dialog-close>×</button></div>
+    <form method="post" asp-page-handler="Create" class="dialog-body form-box">
+        <label>Nombre <input asp-for="Customer.Name" required /></label>
+        <label>Telefono <input asp-for="Customer.Phone" required /></label>
+        <label>NIT/CI <input asp-for="Customer.Nit" required /></label>
+        <button type="submit">Guardar cliente</button>
+    </form>
+</dialog>

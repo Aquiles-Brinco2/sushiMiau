@@ -1,0 +1,11 @@
+@model (string? Flash, string? ErrorMessage)
+
+@if (!string.IsNullOrWhiteSpace(Model.Flash))
+{
+    <div class="alert success">@Model.Flash</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
+{
+    <div class="alert danger">@Model.ErrorMessage</div>
+}

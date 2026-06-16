@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Sushi Miau</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <aside class="sidebar">
+        <a class="brand" asp-area="" asp-page="/Index">
+            <span class="brand-mark">SM</span>
+            <span><strong>Sushi Miau</strong><small>Gestion interna</small></span>
+        </a>
+        <nav aria-label="Modulos de gestion">
+            <a asp-page="/Index">Panel</a>
+            <a asp-page="/Menu">Menu</a>
+            <a asp-page="/Clientes">Clientes</a>
+            <a asp-page="/Reservas">Reservas</a>
+            <a asp-page="/Pedidos">Pedidos</a>
+            <a asp-page="/Inventario">Inventario</a>
+            <a asp-page="/Pagos">Pagos</a>
+            <a asp-page="/Notificaciones">Notificaciones</a>
+            <a asp-page="/Reportes">Reportes</a>
+            @if (User.IsInRole("Administrador"))
+            {
+                <a asp-page="/Usuarios">Usuarios</a>
+            }
+        </nav>
+        @if (User.Identity?.IsAuthenticated == true)
+        {
+            <form method="post" asp-page="/Login" asp-page-handler="Logout" class="logout-form">
+                <span>@User.Identity.Name</span>
+                <button type="submit">Salir</button>
+            </form>
+        }
+    </aside>
+
+    <main class="shell" role="main">
+        @RenderBody()
+    </main>
+
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
