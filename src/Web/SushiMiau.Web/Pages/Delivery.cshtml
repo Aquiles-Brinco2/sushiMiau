@@ -1,0 +1,108 @@
+@page
+@model DeliveryModel
+@{
+    ViewData["Title"] = "Delivery";
+}
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Delivery</p>
+        <h1>Pedidos delivery</h1>
+        <p class="muted">Pedidos de reparto, metodo de pago y estados de entrega.</p>
+    </div>
+    <button type="button" data-dialog-open="#createDeliveryOrder">Nuevo delivery</button>
+</section>
+
+<section class="panel wide">
+    <div class="panel-heading"><h2>Delivery de hoy</h2></div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Cliente</th><th>Direccion</th><th>Operador</th><th>Items</th><th>Pago</th><th>Total</th><th>Entrega</th><th>Accion</th></tr></thead>
+            <tbody>
+            @foreach (var order in Model.Orders)
+            {
+                <tr>
+                    <td><strong>@order.CustomerName</strong><br /><span class="muted">@order.CustomerPhone</span></td>
+                    <td>@order.DeliveryAddress</td>
+                    <td>@order.ServerName</td>
+                    <td>@string.Join(", ", order.Lines.Select(line => $"{line.Quantity}x {line.ItemName}"))</td>
+                    <td>@order.PaymentMethod</td>
+                    <td>Bs @order.Total.ToString("0.00")</td>
+                    <td><span class="badge">@order.DeliveryStatus</span></td>
+                    <td>
+                        <form method="post" asp-page-handler="Status" class="inline-actions">
+                            <input type="hidden" asp-for="DeliveryStatus.OrderId" value="@order.OrderId" />
+                            <button name="DeliveryStatus.DeliveryStatus" value="Preparando" type="submit">Preparar</button>
+                            <button name="DeliveryStatus.DeliveryStatus" value="En camino" type="submit">En camino</button>
+                            <button name="DeliveryStatus.DeliveryStatus" value="Entregado" type="submit">Entregado</button>
+                        </form>
+                        <button type="button" class="secondary-button" data-dialog-open="#edit-delivery-@order.OrderId">Editar</button>
+                        <form method="post" asp-page-handler="Delete" data-confirm="Esta seguro?" class="inline-actions">
+                            <input type="hidden" asp-for="Delete.Id" value="@order.OrderId" />
+                            <button type="submit" class="danger-button">Cancelar</button>
+                        </form>
+                        <dialog id="edit-delivery-@order.OrderId">
+                            <div class="dialog-head"><h2>Editar delivery</h2><button type="button" data-dialog-close>x</button></div>
+                            <form method="post" asp-page-handler="Update" class="dialog-body form-box order-form" data-order-form>
+                                <input type="hidden" asp-for="EditOrder.OrderId" value="@order.OrderId" />
+                                <input type="hidden" asp-for="EditOrder.Status" value="@order.Status" />
+                                <label>Cliente <input asp-for="EditOrder.CustomerName" value="@order.CustomerName" required /></label>
+                                <label>Telefono <input asp-for="EditOrder.CustomerPhone" value="@order.CustomerPhone" required /></label>
+                                <label>Direccion <input asp-for="EditOrder.DeliveryAddress" value="@order.DeliveryAddress" required /></label>
+                                <label>Operador <input asp-for="EditOrder.ServerName" value="@order.ServerName" required /></label>
+                                <label>Estado entrega <input asp-for="EditOrder.DeliveryStatus" list="deliveryStatuses" value="@order.DeliveryStatus" required /></label>
+                                <partial name="_EditableOrderLines" model='(Prefix: "EditOrder", Lines: order.Lines)' />
+                                <div class="order-total-box">
+                                    <span>Subtotal <strong data-order-subtotal>Bs @order.Subtotal.ToString("0.00")</strong></span>
+                                    <span>Impuesto <strong data-order-tax>Bs @order.Tax.ToString("0.00")</strong></span>
+                                    <span>Total <strong data-order-total>Bs @order.Total.ToString("0.00")</strong></span>
+                                </div>
+                                <button type="submit">Guardar cambios</button>
+                            </form>
+                        </dialog>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<dialog id="createDeliveryOrder">
+    <div class="dialog-head"><h2>Pedido delivery</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="Create" class="dialog-body form-box order-form" data-order-form>
+        <label>Cliente <input asp-for="DeliveryOrder.CustomerName" list="customers" required /></label>
+        <label>Telefono <input asp-for="DeliveryOrder.CustomerPhone" required /></label>
+        <label>Direccion <input asp-for="DeliveryOrder.DeliveryAddress" required /></label>
+        <label>Operador <input asp-for="DeliveryOrder.ServerName" required /></label>
+        <partial name="_DynamicOrderLines" model='(Prefix: "DeliveryOrder", Menu: Model.Menu)' />
+        <div class="payment-grid">
+            <label>Metodo de pago <input asp-for="DeliveryOrder.PaymentMethod" list="paymentMethods" /></label>
+            <label>Facturar a <input asp-for="DeliveryOrder.BillingName" /></label>
+            <label>NIT/CI <input asp-for="DeliveryOrder.TaxId" /></label>
+        </div>
+        <div class="order-total-box">
+            <span>Subtotal <strong data-order-subtotal>Bs 0.00</strong></span>
+            <span>Impuesto <strong data-order-tax>Bs 0.00</strong></span>
+            <span>Total <strong data-order-total>Bs 0.00</strong></span>
+        </div>
+        <button type="submit">Registrar delivery</button>
+    </form>
+</dialog>
+
+<datalist id="menuItems">
+    @foreach (var item in Model.Menu)
+    {
+        <option value="@item.Name"></option>
+    }
+</datalist>
+<datalist id="customers">
+    @foreach (var customer in Model.Customers)
+    {
+        <option value="@customer.Name"></option>
+    }
+</datalist>
+<datalist id="paymentMethods"><option value="Pendiente"></option><option value="Efectivo"></option><option value="Tarjeta"></option><option value="QR"></option></datalist>
+<datalist id="deliveryStatuses"><option value="Preparando"></option><option value="En camino"></option><option value="Entregado"></option><option value="Pagado"></option></datalist>

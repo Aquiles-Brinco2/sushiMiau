@@ -31,6 +31,24 @@ app.MapPost("/api/sales/orders", async (CreateOrderRequest request, SalesReposit
     return Results.Created($"/api/sales/orders/{order.OrderId}", order);
 });
 
+app.MapPut("/api/sales/orders/{orderId:guid}", async (Guid orderId, UpdateOrderRequest request, SalesRepository repo) =>
+{
+    var order = await repo.UpdateOrderAsync(orderId, request);
+    return order is null ? Results.NotFound() : Results.Ok(order);
+});
+
+app.MapPatch("/api/sales/orders/{orderId:guid}/status", async (Guid orderId, UpdateOrderStatusRequest request, SalesRepository repo) =>
+{
+    var order = await repo.UpdateOrderStatusAsync(orderId, request.Status);
+    return order is null ? Results.NotFound() : Results.Ok(order);
+});
+
+app.MapDelete("/api/sales/orders/{orderId:guid}", async (Guid orderId, SalesRepository repo) =>
+{
+    await repo.DeleteOrderAsync(orderId);
+    return Results.NoContent();
+});
+
 app.MapGet("/api/sales/delivery-orders", async (string? businessDate, SalesRepository repo) =>
 {
     var orders = await repo.GetOrdersAsync(businessDate ?? DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"));

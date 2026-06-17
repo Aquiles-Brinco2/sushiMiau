@@ -39,6 +39,18 @@ public sealed record CreateDeliveryOrderRequest(
 
 public sealed record UpdateDeliveryStatusRequest(string DeliveryStatus);
 
+public sealed record UpdateOrderRequest(
+    string TableOrChannel,
+    string ServerName,
+    string Status,
+    IReadOnlyList<OrderLine> Lines,
+    string CustomerName = "",
+    string CustomerPhone = "",
+    string DeliveryAddress = "",
+    string DeliveryStatus = "");
+
+public sealed record UpdateOrderStatusRequest(string Status);
+
 public sealed record RegisterPaymentRequest(
     string PaymentMethod,
     string BillingName = "Consumidor Final",

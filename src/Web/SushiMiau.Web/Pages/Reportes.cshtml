@@ -8,8 +8,20 @@
     <div>
         <p class="eyebrow">Reportes</p>
         <h1>Resumen administrativo</h1>
-        <p class="muted">Indicadores internos para dueños y gerencia.</p>
+        <p class="muted">Indicadores internos para duenos y gerencia.</p>
     </div>
+</section>
+
+<section class="panel report-filters">
+    <form method="get" class="filter-form">
+        <label>Fecha <input type="date" name="date" value="@Model.FilterDate" /></label>
+        <label>Delivery <input name="deliveryStatus" list="deliveryStatuses" value="@Model.FilterDeliveryStatus" placeholder="Todos" /></label>
+        <label>Reservas <input name="reservationStatus" list="reservationStatuses" value="@Model.FilterReservationStatus" placeholder="Todos" /></label>
+        <label>Plato <input name="dish" list="dishNames" value="@Model.FilterDish" placeholder="Buscar plato" /></label>
+        <label>Inventario <input name="inventoryCategory" list="inventoryCategories" value="@Model.FilterInventoryCategory" placeholder="Todas" /></label>
+        <button type="submit">Filtrar</button>
+        <a class="secondary-button" asp-page="/Reportes">Limpiar</a>
+    </form>
 </section>
 
 @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
@@ -20,13 +32,81 @@
 <section class="metric-grid">
     <article class="metric-card"><span>Ventas</span><strong>Bs @Model.Report.SalesTotal.ToString("0.00")</strong><small>@Model.Report.PaidOrders pedidos pagados</small></article>
     <article class="metric-card"><span>Facturado</span><strong>Bs @Model.Report.InvoicedTotal.ToString("0.00")</strong><small>Facturacion del dia</small></article>
-    <article class="metric-card"><span>Delivery</span><strong>@Model.Report.OpenDeliveryOrders</strong><small>@Model.Report.DeliveryOrders pedidos totales</small></article>
-    <article class="metric-card"><span>Reservas</span><strong>@Model.Report.OpenReservations</strong><small>@Model.Report.Reservations reservas totales</small></article>
-    <article class="metric-card"><span>Stock bajo</span><strong>@Model.Report.LowStockItems</strong><small>Alertas de inventario</small></article>
+    <article class="metric-card"><span>Delivery</span><strong>@Model.Report.OpenDeliveryOrders</strong><small>@Model.Report.DeliveryOrders pedidos filtrados</small></article>
+    <article class="metric-card"><span>Reservas</span><strong>@Model.Report.OpenReservations</strong><small>@Model.Report.Reservations reservas filtradas</small></article>
+    <article class="metric-card"><span>Stock bajo</span><strong>@Model.Report.LowStockItems</strong><small>Alertas filtradas</small></article>
     <article class="metric-card"><span>Personal activo</span><strong>@Model.Report.ActiveStaff</strong><small>Turnos activos</small></article>
 </section>
 
 <section class="workspace-grid">
+    <div class="panel wide">
+        <div class="panel-heading"><h2>Graficos de gestion</h2></div>
+        <div class="chart-grid">
+            <article>
+                <h3>Ventas por plato</h3>
+                <div class="chart-list">
+                    @foreach (var metric in Model.DishMetrics.Take(8))
+                    {
+                        var quantityPercent = Model.MaxDishQuantity == 0 ? 0 : metric.Quantity * 100 / Model.MaxDishQuantity;
+                        <div class="bar-row">
+                            <span>@metric.ItemName</span>
+                            <div class="bar-track"><i class="bar-fill" style="width:@quantityPercent%"></i></div>
+                            <strong>@metric.Quantity</strong>
+                        </div>
+                    }
+                    @if (!Model.DishMetrics.Any())
+                    {
+                        <p class="muted">No hay ventas de platos con esos filtros.</p>
+                    }
+                </div>
+            </article>
+            <article>
+                <h3>Total vendido por plato</h3>
+                <div class="chart-list">
+                    @foreach (var metric in Model.DishMetrics.Take(8))
+                    {
+                        var totalPercent = Model.MaxDishTotal == 0 ? 0 : (int)Math.Round(metric.Total * 100 / Model.MaxDishTotal);
+                        <div class="bar-row">
+                            <span>@metric.ItemName</span>
+                            <div class="bar-track"><i class="bar-fill alt" style="width:@totalPercent%"></i></div>
+                            <strong>Bs @metric.Total.ToString("0")</strong>
+                        </div>
+                    }
+                    @if (!Model.DishMetrics.Any())
+                    {
+                        <p class="muted">Sin datos para graficar.</p>
+                    }
+                </div>
+            </article>
+            <article>
+                <h3>Estados de delivery</h3>
+                <div class="chart-list">
+                    @foreach (var group in Model.DeliveryStatusGroups)
+                    {
+                        <div class="bar-row">
+                            <span>@group.Label</span>
+                            <div class="bar-track"><i class="bar-fill warm" style="width:@group.Percent%"></i></div>
+                            <strong>@group.Count</strong>
+                        </div>
+                    }
+                </div>
+            </article>
+            <article>
+                <h3>Estados de reservas</h3>
+                <div class="chart-list">
+                    @foreach (var group in Model.ReservationStatusGroups)
+                    {
+                        <div class="bar-row">
+                            <span>@group.Label</span>
+                            <div class="bar-track"><i class="bar-fill cool" style="width:@group.Percent%"></i></div>
+                            <strong>@group.Count</strong>
+                        </div>
+                    }
+                </div>
+            </article>
+        </div>
+    </div>
+
     <div class="panel">
         <div class="panel-heading"><h2>Alertas de inventario</h2></div>
         <div class="shift-list">
@@ -48,18 +128,18 @@
     </div>
 
     <div class="panel wide">
-        <div class="panel-heading"><h2>Reservas activas</h2></div>
+        <div class="panel-heading"><h2>Reservas</h2></div>
         <div class="table-wrap">
             <table>
                 <thead><tr><th>Hora</th><th>Cliente</th><th>Personas</th><th>Estado</th></tr></thead>
                 <tbody>
-                @foreach (var reservation in Model.Reservations.Where(reservation => reservation.Status != "Cancelada"))
+                @foreach (var reservation in Model.Reservations)
                 {
                     <tr>
                         <td>@reservation.ReservationTime.ToLocalTime().ToString("HH:mm")</td>
                         <td>@reservation.CustomerName</td>
                         <td>@reservation.PartySize</td>
-                        <td><span class="badge">@reservation.Status</span></td>
+                        <td><span class="badge @(reservation.Status == "Cancelada" ? "cancelled" : "")">@reservation.Status</span></td>
                     </tr>
                 }
                 </tbody>
@@ -86,3 +166,28 @@
         </div>
     </div>
 </section>
+
+<datalist id="deliveryStatuses">
+    @foreach (var group in Model.DeliveryStatusGroups)
+    {
+        <option value="@group.Label"></option>
+    }
+</datalist>
+<datalist id="reservationStatuses">
+    @foreach (var group in Model.ReservationStatusGroups)
+    {
+        <option value="@group.Label"></option>
+    }
+</datalist>
+<datalist id="dishNames">
+    @foreach (var metric in Model.DishMetrics)
+    {
+        <option value="@metric.ItemName"></option>
+    }
+</datalist>
+<datalist id="inventoryCategories">
+    @foreach (var category in Model.InventoryCategories)
+    {
+        <option value="@category"></option>
+    }
+</datalist>

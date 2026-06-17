@@ -1,0 +1,15 @@
+@model (string Prefix, IReadOnlyList<SushiMiau.Shared.Contracts.OrderLine> Lines)
+
+<div class="order-lines">
+    <div class="line-grid line-grid-head"><span>Producto</span><span>Cant.</span><span>Precio</span></div>
+    @for (var index = 0; index < 5; index++)
+    {
+        var line = Model.Lines.ElementAtOrDefault(index);
+        var item = index + 1;
+        <div class="line-grid" data-line-row>
+            <input name="@($"{Model.Prefix}.Item{item}Name")" value="@line?.ItemName" list="menuItems" placeholder="Producto" required="@(index == 0 ? "required" : null)" />
+            <input name="@($"{Model.Prefix}.Item{item}Quantity")" value="@(line?.Quantity ?? (index == 0 ? 1 : 0))" type="number" min="0" placeholder="Cant." required="@(index == 0 ? "required" : null)" />
+            <input name="@($"{Model.Prefix}.Item{item}Price")" value="@(line?.UnitPrice ?? 0)" type="number" step="0.01" placeholder="Precio" required="@(index == 0 ? "required" : null)" />
+        </div>
+    }
+</div>

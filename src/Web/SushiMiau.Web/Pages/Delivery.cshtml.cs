@@ -5,22 +5,24 @@ using SushiMiau.Web.Services;
 
 namespace SushiMiau.Web.Pages;
 
-public sealed class PedidosModel : PageModel
+public sealed class DeliveryModel : PageModel
 {
     private readonly RestaurantApiClient _client;
 
-    public PedidosModel(RestaurantApiClient client)
+    public DeliveryModel(RestaurantApiClient client)
     {
         _client = client;
     }
 
-    public IReadOnlyList<RestaurantOrder> TableOrders { get; private set; } = [];
+    public IReadOnlyList<RestaurantOrder> Orders { get; private set; } = [];
+    public IReadOnlyList<Customer> Customers { get; private set; } = [];
     public IReadOnlyList<MenuItem> Menu { get; private set; } = [];
-    public IReadOnlyList<RestaurantTable> Tables { get; private set; } = [];
-    public string OperatorName => User.Identity?.Name ?? "Operador";
 
     [BindProperty]
-    public OrderForm TableOrder { get; set; } = new();
+    public DeliveryOrderForm DeliveryOrder { get; set; } = new();
+
+    [BindProperty]
+    public DeliveryStatusForm DeliveryStatus { get; set; } = new();
 
     [BindProperty]
     public OrderEditForm EditOrder { get; set; } = new();
@@ -34,37 +36,44 @@ public sealed class PedidosModel : PageModel
     [TempData]
     public string? ErrorMessage { get; set; }
 
-    public async Task OnGetAsync(string? table)
+    public async Task OnGetAsync()
     {
-        if (!string.IsNullOrWhiteSpace(table))
-        {
-            TableOrder.TableOrChannel = table;
-        }
-
         await LoadAsync();
     }
 
-    public async Task<IActionResult> OnPostCreateTableAsync()
+    public async Task<IActionResult> OnPostCreateAsync()
     {
         await RunAsync(async () =>
         {
             Menu = await _client.GetMenuAsync();
-            var lines = CreateLinesFromMenu(TableOrder.Lines, Menu);
+            var lines = CreateLinesFromMenu(DeliveryOrder.Lines, Menu);
 
-            var order = await _client.AddOrderAsync(new CreateOrderRequest(
-                TableOrder.TableOrChannel,
-                OperatorName,
-                lines,
-                "Mesa"));
+            var order = await _client.AddDeliveryOrderAsync(new CreateDeliveryOrderRequest(
+                DeliveryOrder.CustomerName,
+                DeliveryOrder.CustomerPhone,
+                DeliveryOrder.DeliveryAddress,
+                DeliveryOrder.ServerName,
+                lines));
 
-            if (order is not null && IsPaid(TableOrder.PaymentMethod))
+            if (order is not null && IsPaid(DeliveryOrder.PaymentMethod))
             {
-                await _client.RegisterPaymentAsync(order.OrderId, TableOrder.PaymentMethod, TableOrder.BillingName, TableOrder.TaxId);
+                await _client.RegisterPaymentAsync(order.OrderId, DeliveryOrder.PaymentMethod, DeliveryOrder.BillingName, DeliveryOrder.TaxId);
             }
 
-            Flash = IsPaid(TableOrder.PaymentMethod)
-                ? "Pedido de mesa registrado y pagado."
-                : "Pedido de mesa registrado.";
+            Flash = IsPaid(DeliveryOrder.PaymentMethod)
+                ? "Pedido delivery registrado y pagado."
+                : "Pedido delivery registrado.";
+        });
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostStatusAsync()
+    {
+        await RunAsync(async () =>
+        {
+            await _client.UpdateDeliveryStatusAsync(DeliveryStatus.OrderId, DeliveryStatus.DeliveryStatus);
+            Flash = "Estado de delivery actualizado.";
         });
 
         return RedirectToPage();
@@ -82,22 +91,15 @@ public sealed class PedidosModel : PageModel
                 EditOrder.Item5Name, EditOrder.Item5Quantity, EditOrder.Item5Price);
 
             await _client.UpdateOrderAsync(EditOrder.OrderId, new UpdateOrderRequest(
-                EditOrder.TableOrChannel,
+                "Delivery",
                 EditOrder.ServerName,
                 EditOrder.Status,
-                lines));
-            Flash = "Pedido actualizado.";
-        });
-
-        return RedirectToPage();
-    }
-
-    public async Task<IActionResult> OnPostStatusAsync()
-    {
-        await RunAsync(async () =>
-        {
-            await _client.UpdateOrderStatusAsync(EditOrder.OrderId, EditOrder.Status);
-            Flash = "Estado de pedido actualizado.";
+                lines,
+                EditOrder.CustomerName,
+                EditOrder.CustomerPhone,
+                EditOrder.DeliveryAddress,
+                EditOrder.DeliveryStatus));
+            Flash = "Delivery actualizado.";
         });
 
         return RedirectToPage();
@@ -108,7 +110,7 @@ public sealed class PedidosModel : PageModel
         await RunAsync(async () =>
         {
             await _client.DeleteOrderAsync(Delete.Id);
-            Flash = "Pedido cancelado.";
+            Flash = "Delivery cancelado.";
         });
 
         return RedirectToPage();
@@ -119,14 +121,13 @@ public sealed class PedidosModel : PageModel
         try
         {
             var today = Today();
-            var orders = await _client.GetOrdersAsync(today);
-            TableOrders = orders.Where(order => !order.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase)).ToList();
+            Orders = await _client.GetDeliveryOrdersAsync(today);
+            Customers = await _client.GetCustomersAsync();
             Menu = await _client.GetMenuAsync();
-            Tables = await _client.GetTablesAsync();
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"No se pudo cargar pedidos de mesa: {ex.Message}";
+            ErrorMessage = $"No se pudo cargar delivery: {ex.Message}";
         }
     }
 

@@ -25,6 +25,12 @@ app.MapGet("/health", () => Results.Ok(new { service = "operations", status = "o
 app.MapGet("/api/operations/menu", async (OperationsRepository repo) =>
     Results.Ok(await repo.GetMenuAsync()));
 
+app.MapGet("/api/operations/tables", async (OperationsRepository repo) =>
+    Results.Ok(await repo.GetTablesAsync()));
+
+app.MapPut("/api/operations/tables/{tableName}", async (string tableName, UpdateTableStateRequest request, OperationsRepository repo) =>
+    Results.Ok(await repo.UpdateTableStateAsync(Uri.UnescapeDataString(tableName), request)));
+
 app.MapPost("/api/operations/menu", async (UpsertMenuItemRequest request, OperationsRepository repo) =>
 {
     var item = await repo.UpsertMenuItemAsync(null, request);
@@ -33,6 +39,12 @@ app.MapPost("/api/operations/menu", async (UpsertMenuItemRequest request, Operat
 
 app.MapPut("/api/operations/menu/{itemId:guid}", async (Guid itemId, UpsertMenuItemRequest request, OperationsRepository repo) =>
     Results.Ok(await repo.UpsertMenuItemAsync(itemId, request)));
+
+app.MapDelete("/api/operations/menu/{itemId:guid}", async (Guid itemId, OperationsRepository repo) =>
+{
+    await repo.DeleteMenuItemAsync(itemId);
+    return Results.NoContent();
+});
 
 app.MapGet("/api/operations/menu-categories", async (OperationsRepository repo) =>
     Results.Ok(await repo.GetMenuCategoriesAsync()));
@@ -50,6 +62,18 @@ app.MapPost("/api/operations/customers", async (CreateCustomerRequest request, O
 {
     var customer = await repo.CreateCustomerAsync(request);
     return Results.Created($"/api/operations/customers/{customer.CustomerId}", customer);
+});
+
+app.MapPut("/api/operations/customers/{customerId:guid}", async (Guid customerId, UpdateCustomerRequest request, OperationsRepository repo) =>
+{
+    var customer = await repo.UpdateCustomerAsync(customerId, request);
+    return customer is null ? Results.NotFound() : Results.Ok(customer);
+});
+
+app.MapDelete("/api/operations/customers/{customerId:guid}", async (Guid customerId, OperationsRepository repo) =>
+{
+    await repo.DeleteCustomerAsync(customerId);
+    return Results.NoContent();
 });
 
 app.MapGet("/api/operations/tickets", async (string? businessDate, OperationsRepository repo) =>

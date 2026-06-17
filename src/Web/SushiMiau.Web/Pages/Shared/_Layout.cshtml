@@ -6,7 +6,12 @@
     <title>@ViewData["Title"] - Sushi Miau</title>
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body>
+@{
+    var isLogin = Context.Request.Path.StartsWithSegments("/Login");
+}
+<body class="@(isLogin ? "auth-page" : "")">
+    @if (!isLogin)
+    {
     <aside class="sidebar">
         <a class="brand" asp-area="" asp-page="/Index">
             <span class="brand-mark">SM</span>
@@ -17,7 +22,8 @@
             <a asp-page="/Menu">Menu</a>
             <a asp-page="/Clientes">Clientes</a>
             <a asp-page="/Reservas">Reservas</a>
-            <a asp-page="/Pedidos">Pedidos</a>
+            <a asp-page="/Pedidos">Pedidos mesa</a>
+            <a asp-page="/Delivery">Delivery</a>
             <a asp-page="/Inventario">Inventario</a>
             <a asp-page="/Pagos">Pagos</a>
             <a asp-page="/Notificaciones">Notificaciones</a>
@@ -35,6 +41,7 @@
             </form>
         }
     </aside>
+    }
 
     <main class="shell" role="main">
         @RenderBody()

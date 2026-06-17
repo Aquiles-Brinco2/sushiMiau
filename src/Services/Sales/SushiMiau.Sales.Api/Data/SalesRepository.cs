@@ -181,7 +181,7 @@ public sealed class SalesRepository
             DateOnly.FromDateTime(now.UtcDateTime).ToString("yyyy-MM-dd"),
             request.TableOrChannel.Trim(),
             request.ServerName.Trim(),
-            "Abierto",
+            "Preparando",
             "Pendiente",
             lines,
             subtotal,
@@ -193,7 +193,7 @@ public sealed class SalesRepository
             request.CustomerName.Trim(),
             request.CustomerPhone.Trim(),
             request.DeliveryAddress.Trim(),
-            request.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase) ? "Pendiente" : "");
+            request.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase) ? "Preparando" : "");
 
         await SaveOrderAsync(order);
         return order;
@@ -229,6 +229,83 @@ public sealed class SalesRepository
         return updated;
     }
 
+    public async Task<RestaurantOrder?> UpdateOrderStatusAsync(Guid orderId, string status)
+    {
+        var order = await GetOrderAsync(orderId);
+        if (order is null)
+        {
+            return null;
+        }
+
+        var updated = order with
+        {
+            Status = string.IsNullOrWhiteSpace(status) ? order.Status : status.Trim(),
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        await SaveOrderAsync(updated);
+        return updated;
+    }
+
+    public async Task<RestaurantOrder?> UpdateOrderAsync(Guid orderId, UpdateOrderRequest request)
+    {
+        var order = await GetOrderAsync(orderId);
+        if (order is null)
+        {
+            return null;
+        }
+
+        var lines = request.Lines
+            .Where(line => !string.IsNullOrWhiteSpace(line.ItemName) && line.Quantity > 0)
+            .Select(line => line with { ItemName = line.ItemName.Trim() })
+            .ToList();
+        var subtotal = lines.Sum(line => line.Quantity * line.UnitPrice);
+        var tax = Math.Round(subtotal * TaxRate, 2);
+        var total = subtotal + tax;
+
+        var updated = order with
+        {
+            TableOrChannel = string.IsNullOrWhiteSpace(request.TableOrChannel) ? order.TableOrChannel : request.TableOrChannel.Trim(),
+            ServerName = string.IsNullOrWhiteSpace(request.ServerName) ? order.ServerName : request.ServerName.Trim(),
+            Status = string.IsNullOrWhiteSpace(request.Status) ? order.Status : request.Status.Trim(),
+            Lines = lines.Count == 0 ? order.Lines : lines,
+            Subtotal = lines.Count == 0 ? order.Subtotal : subtotal,
+            Tax = lines.Count == 0 ? order.Tax : tax,
+            Total = lines.Count == 0 ? order.Total : total,
+            CustomerName = request.CustomerName.Trim(),
+            CustomerPhone = request.CustomerPhone.Trim(),
+            DeliveryAddress = request.DeliveryAddress.Trim(),
+            DeliveryStatus = string.IsNullOrWhiteSpace(request.DeliveryStatus) ? order.DeliveryStatus : request.DeliveryStatus.Trim(),
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        await SaveOrderAsync(updated);
+        return updated;
+    }
+
+    public async Task DeleteOrderAsync(Guid orderId)
+    {
+        var order = await GetOrderAsync(orderId);
+        if (order is null)
+        {
+            return;
+        }
+
+        await _session.ExecuteAsync(new SimpleStatement("""
+            DELETE FROM orders_by_day
+            WHERE restaurant_id = ? AND business_date = ? AND created_at = ? AND order_id = ?
+            """,
+            RestaurantId,
+            order.BusinessDate,
+            order.CreatedAt,
+            order.OrderId));
+
+        await _session.ExecuteAsync(new SimpleStatement(
+            "DELETE FROM orders_by_id WHERE restaurant_id = ? AND order_id = ?",
+            RestaurantId,
+            order.OrderId));
+    }
+
     public async Task<RestaurantOrder?> RegisterPaymentAsync(Guid orderId, RegisterPaymentRequest request)
     {
         var order = await GetOrderAsync(orderId);
@@ -241,6 +318,7 @@ public sealed class SalesRepository
         {
             Status = "Pagado",
             PaymentMethod = string.IsNullOrWhiteSpace(request.PaymentMethod) ? "Efectivo" : request.PaymentMethod.Trim(),
+            DeliveryStatus = order.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase) ? "Pagado" : order.DeliveryStatus,
             UpdatedAt = DateTimeOffset.UtcNow
         };
 

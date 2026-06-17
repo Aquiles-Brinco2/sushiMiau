@@ -13,6 +13,120 @@
     <div class="service-chip">Cassandra + microservicios .NET</div>
 </section>
 
+<section class="panel table-board-panel">
+    <div class="panel-heading">
+        <div>
+            <h2>Panel de mesas</h2>
+            <p>Estado operativo actual del salon.</p>
+        </div>
+    </div>
+    <div class="table-board">
+        <div class="table-grid">
+            @foreach (var table in Model.Tables)
+            {
+                <button type="button" class="restaurant-table table-@CssStatus(table.Status)" data-table-target="#table-detail-@Slug(table.TableName)">
+                    <strong>@table.TableName</strong>
+                    <span>@table.Status</span>
+                    @if (table.Status == "Ocupada" && !string.IsNullOrWhiteSpace(table.OrderStatus))
+                    {
+                        <small>Pedido: @table.OrderStatus</small>
+                    }
+                </button>
+            }
+        </div>
+        <div class="table-detail-stack">
+            @foreach (var table in Model.Tables)
+            {
+                <article id="table-detail-@Slug(table.TableName)" class="table-detail" data-table-detail>
+                    <header>
+                        <span class="badge">@table.Status</span>
+                        <h3>@table.TableName</h3>
+                        <p class="muted">@table.Capacity personas</p>
+                    </header>
+                    <dl>
+                        <div><dt>Empleado</dt><dd>@table.AssignedEmployee</dd></div>
+                        <div><dt>Reserva</dt><dd>@ReservationText(table)</dd></div>
+                        <div><dt>Pedido</dt><dd>@OrderText(table)</dd></div>
+                    </dl>
+                    <div class="inline-actions">
+                        <a class="secondary-button" asp-page="/Reservas" asp-route-table="@table.TableName">Hacer reserva</a>
+                        <a class="secondary-button" asp-page="/Pedidos" asp-route-table="@table.TableName">Hacer pedido</a>
+                        @if (table.OrderId.HasValue)
+                        {
+                            <a class="secondary-button" asp-page="/Pedidos" asp-fragment="order-@table.OrderId">Detalle pedido</a>
+                        }
+                    </div>
+                    <div class="inline-actions">
+                        @if (table.Status == "Ocupada" || table.Status == "Reservada")
+                        {
+                            <form method="post" asp-page-handler="TableState">
+                                <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
+                                <input type="hidden" asp-for="TableState.Status" value="Disponible" />
+                                <input type="hidden" asp-for="TableState.OrderId" value="@table.OrderId" />
+                                <input type="hidden" asp-for="TableState.ReservationId" value="@table.ReservationId" />
+                                <button type="submit">Desocupar</button>
+                            </form>
+                        }
+                        else if (table.Status == "Fuera de servicio")
+                        {
+                            <form method="post" asp-page-handler="TableState">
+                                <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
+                                <input type="hidden" asp-for="TableState.Status" value="Disponible" />
+                                <button type="submit">Habilitar</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form method="post" asp-page-handler="TableState">
+                                <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
+                                <input type="hidden" asp-for="TableState.Status" value="Ocupada" />
+                                <button type="submit">Ocupar</button>
+                            </form>
+                            <form method="post" asp-page-handler="TableState">
+                                <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
+                                <input type="hidden" asp-for="TableState.Status" value="Fuera de servicio" />
+                                <button type="submit" class="secondary-button">Fuera de servicio</button>
+                            </form>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    </div>
+</section>
+
+@functions {
+    private static string CssStatus(string status) => status switch
+    {
+        "Ocupada" => "occupied",
+        "Reservada" => "reserved",
+        "Fuera de servicio" => "offline",
+        _ => "available"
+    };
+
+    private static string Slug(string value) => value.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant();
+
+    private static string ReservationText(TablePanelItem table)
+    {
+        if (table.ReservationStartsAt is null || table.ReservationEndsAt is null)
+        {
+            return "Sin reserva activa";
+        }
+
+        return $"{table.ReservationCustomer} ({table.ReservationPartySize} pers.) de {table.ReservationStartsAt.Value:HH:mm} a {table.ReservationEndsAt.Value:HH:mm}";
+    }
+
+    private static string OrderText(TablePanelItem table)
+    {
+        if (!table.OrderId.HasValue)
+        {
+            return "Sin pedido activo";
+        }
+
+        return $"{table.OrderStatus} - Bs {table.OrderTotal:0.00}";
+    }
+}
+
 <partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
 
 <section class="metric-grid" aria-label="Resumen del dia">
@@ -36,15 +150,4 @@
         <strong>@Model.Dashboard.Inventory.LowStockItems</strong>
         <small>@Model.Dashboard.Inventory.TotalItems ingredientes controlados</small>
     </article>
-</section>
-
-<section class="module-grid">
-    <a class="module-card" asp-page="/Usuarios"><strong>Usuarios/autenticacion y roles</strong><span>Administracion de accesos internos.</span></a>
-    <a class="module-card" asp-page="/Menu"><strong>Menu</strong><span>Carta operativa para sala y delivery.</span></a>
-    <a class="module-card" asp-page="/Reservas"><strong>Reservas</strong><span>Agenda de mesas gestionada por el personal.</span></a>
-    <a class="module-card" asp-page="/Pedidos"><strong>Pedidos delivery</strong><span>Pedidos de reparto y estados de entrega.</span></a>
-    <a class="module-card" asp-page="/Inventario"><strong>Inventario</strong><span>Stock, proveedores y movimientos.</span></a>
-    <a class="module-card" asp-page="/Pagos"><strong>Pagos y facturacion</strong><span>Cobros, pagos y facturas emitidas.</span></a>
-    <a class="module-card" asp-page="/Notificaciones"><strong>Notificaciones</strong><span>Mensajes internos por rol.</span></a>
-    <a class="module-card" asp-page="/Reportes"><strong>Reportes</strong><span>Indicadores administrativos.</span></a>
 </section>

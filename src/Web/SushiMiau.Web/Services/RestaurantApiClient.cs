@@ -87,6 +87,15 @@ public sealed class RestaurantApiClient
     public Task<List<MenuItem>> GetMenuAsync() =>
         GetListAsync<MenuItem>("Operations", "/api/operations/menu");
 
+    public Task<List<RestaurantTable>> GetTablesAsync() =>
+        GetListAsync<RestaurantTable>("Operations", "/api/operations/tables");
+
+    public async Task UpdateTableStateAsync(string tableName, UpdateTableStateRequest request)
+    {
+        var response = await SendJsonAsync("Operations", HttpMethod.Put, $"/api/operations/tables/{Uri.EscapeDataString(tableName)}", request);
+        response.EnsureSuccessStatusCode();
+    }
+
     public Task<List<MenuCategory>> GetMenuCategoriesAsync() =>
         GetListAsync<MenuCategory>("Operations", "/api/operations/menu-categories");
 
@@ -102,6 +111,12 @@ public sealed class RestaurantApiClient
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task DeleteMenuItemAsync(Guid itemId)
+    {
+        var response = await SendAsync("Operations", HttpMethod.Delete, $"/api/operations/menu/{itemId}");
+        response.EnsureSuccessStatusCode();
+    }
+
     public Task<List<Customer>> GetCustomersAsync() =>
         GetListAsync<Customer>("Operations", "/api/operations/customers");
 
@@ -110,6 +125,18 @@ public sealed class RestaurantApiClient
         var response = await SendJsonAsync("Operations", HttpMethod.Post, "/api/operations/customers", request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<Customer>();
+    }
+
+    public async Task UpdateCustomerAsync(Guid customerId, UpdateCustomerRequest request)
+    {
+        var response = await SendJsonAsync("Operations", HttpMethod.Put, $"/api/operations/customers/{customerId}", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeleteCustomerAsync(Guid customerId)
+    {
+        var response = await SendAsync("Operations", HttpMethod.Delete, $"/api/operations/customers/{customerId}");
+        response.EnsureSuccessStatusCode();
     }
 
     public Task<List<KitchenTicket>> GetTicketsAsync(string businessDate) =>
@@ -146,6 +173,18 @@ public sealed class RestaurantApiClient
     public async Task AddInventoryItemAsync(UpsertInventoryItemRequest request)
     {
         var response = await SendJsonAsync("Inventory", HttpMethod.Post, "/api/inventory/items", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UpdateInventoryItemAsync(Guid itemId, UpsertInventoryItemRequest request)
+    {
+        var response = await SendJsonAsync("Inventory", HttpMethod.Put, $"/api/inventory/items/{itemId}", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeleteInventoryItemAsync(Guid itemId)
+    {
+        var response = await SendAsync("Inventory", HttpMethod.Delete, $"/api/inventory/items/{itemId}");
         response.EnsureSuccessStatusCode();
     }
 
@@ -200,6 +239,24 @@ public sealed class RestaurantApiClient
     public async Task UpdateDeliveryStatusAsync(Guid orderId, string status)
     {
         var response = await SendJsonAsync("Sales", HttpMethod.Patch, $"/api/sales/delivery-orders/{orderId}/status", new UpdateDeliveryStatusRequest(status));
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UpdateOrderStatusAsync(Guid orderId, string status)
+    {
+        var response = await SendJsonAsync("Sales", HttpMethod.Patch, $"/api/sales/orders/{orderId}/status", new UpdateOrderStatusRequest(status));
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UpdateOrderAsync(Guid orderId, UpdateOrderRequest request)
+    {
+        var response = await SendJsonAsync("Sales", HttpMethod.Put, $"/api/sales/orders/{orderId}", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeleteOrderAsync(Guid orderId)
+    {
+        var response = await SendAsync("Sales", HttpMethod.Delete, $"/api/sales/orders/{orderId}");
         response.EnsureSuccessStatusCode();
     }
 
@@ -295,6 +352,24 @@ public sealed class RestaurantApiClient
         {
             using var client = PrepareClient(new HttpClient { BaseAddress = fallbackBase }, headers);
             return await client.SendAsync(CreateJsonRequest(method, url, body));
+        }
+    }
+
+    private async Task<HttpResponseMessage> SendAsync(
+        string clientName,
+        HttpMethod method,
+        string url,
+        IReadOnlyDictionary<string, string>? headers = null)
+    {
+        try
+        {
+            return await PrepareClient(_httpClientFactory.CreateClient(clientName), headers)
+                .SendAsync(new HttpRequestMessage(method, url));
+        }
+        catch (HttpRequestException ex) when (IsNameResolutionError(ex) && LocalFallbacks.TryGetValue(clientName, out var fallbackBase))
+        {
+            using var client = PrepareClient(new HttpClient { BaseAddress = fallbackBase }, headers);
+            return await client.SendAsync(new HttpRequestMessage(method, url));
         }
     }
 

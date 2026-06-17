@@ -18,6 +18,18 @@ public sealed class OperationsRepository
     public async Task InitializeAsync()
     {
         await _session.ExecuteAsync(new SimpleStatement("""
+            CREATE TABLE IF NOT EXISTS restaurant_tables (
+                restaurant_id text,
+                table_name text,
+                capacity int,
+                status text,
+                assigned_employee text,
+                updated_at timestamp,
+                PRIMARY KEY (restaurant_id, table_name)
+            )
+            """));
+
+        await _session.ExecuteAsync(new SimpleStatement("""
             CREATE TABLE IF NOT EXISTS menu_items (
                 restaurant_id text,
                 item_id uuid,
@@ -97,6 +109,7 @@ public sealed class OperationsRepository
                 reservation_id uuid,
                 customer_name text,
                 customer_phone text,
+                table_name text,
                 party_size int,
                 status text,
                 notes text,
@@ -116,6 +129,7 @@ public sealed class OperationsRepository
                 reservation_time timestamp,
                 customer_name text,
                 customer_phone text,
+                table_name text,
                 party_size int,
                 status text,
                 notes text,
@@ -128,8 +142,10 @@ public sealed class OperationsRepository
 
         await TryExecuteAsync("ALTER TABLE reservations_by_day ADD customer_id uuid");
         await TryExecuteAsync("ALTER TABLE reservations_by_day ADD order_id uuid");
+        await TryExecuteAsync("ALTER TABLE reservations_by_day ADD table_name text");
         await TryExecuteAsync("ALTER TABLE reservations_by_id ADD customer_id uuid");
         await TryExecuteAsync("ALTER TABLE reservations_by_id ADD order_id uuid");
+        await TryExecuteAsync("ALTER TABLE reservations_by_id ADD table_name text");
 
         await _session.ExecuteAsync(new SimpleStatement("""
             CREATE TABLE IF NOT EXISTS customers (
@@ -157,6 +173,8 @@ public sealed class OperationsRepository
                 PRIMARY KEY ((restaurant_id, audience_role), created_at, notification_id)
             ) WITH CLUSTERING ORDER BY (created_at DESC)
             """));
+
+        await SeedTablesAsync();
 
         if ((await GetMenuAsync()).Count == 0)
         {
@@ -199,6 +217,7 @@ public sealed class OperationsRepository
                 customer.CustomerId,
                 customer.Name,
                 customer.Phone,
+                "Mesa 4",
                 4,
                 DateTimeOffset.UtcNow.Date.AddHours(20),
                 "Mesa cerca de barra"));
@@ -223,14 +242,82 @@ public sealed class OperationsRepository
             .ToList();
     }
 
+    public async Task<IReadOnlyList<RestaurantTable>> GetTablesAsync()
+    {
+        var rows = await _session.ExecuteAsync(new SimpleStatement("""
+            SELECT table_name, capacity, status, assigned_employee, updated_at
+            FROM restaurant_tables
+            WHERE restaurant_id = ?
+            """, RestaurantId));
+
+        return rows.Select(MapTable)
+            .OrderBy(table => TableSortKey(table.TableName))
+            .ToList();
+    }
+
+    public async Task<RestaurantTable> UpdateTableStateAsync(string tableName, UpdateTableStateRequest request)
+    {
+        var existing = (await GetTablesAsync()).FirstOrDefault(table => table.TableName.Equals(tableName, StringComparison.OrdinalIgnoreCase));
+        var updated = new RestaurantTable(
+            existing?.TableName ?? tableName.Trim(),
+            existing?.Capacity ?? 4,
+            string.IsNullOrWhiteSpace(request.Status) ? "Disponible" : request.Status.Trim(),
+            string.IsNullOrWhiteSpace(request.AssignedEmployee) ? string.Empty : request.AssignedEmployee.Trim(),
+            DateTimeOffset.UtcNow);
+
+        await SaveTableAsync(updated);
+        return updated;
+    }
+
+    private async Task SeedTablesAsync()
+    {
+        if ((await GetTablesAsync()).Count > 0)
+        {
+            return;
+        }
+
+        var seed = new[]
+        {
+            new RestaurantTable("Mesa 1", 2, "Disponible", "", DateTimeOffset.UtcNow),
+            new RestaurantTable("Mesa 2", 2, "Disponible", "", DateTimeOffset.UtcNow),
+            new RestaurantTable("Mesa 3", 4, "Disponible", "", DateTimeOffset.UtcNow),
+            new RestaurantTable("Mesa 4", 4, "Disponible", "", DateTimeOffset.UtcNow),
+            new RestaurantTable("Mesa 5", 4, "Disponible", "", DateTimeOffset.UtcNow),
+            new RestaurantTable("Mesa 6", 6, "Disponible", "", DateTimeOffset.UtcNow),
+            new RestaurantTable("Mesa 7", 6, "Disponible", "", DateTimeOffset.UtcNow),
+            new RestaurantTable("Mesa 8", 8, "Disponible", "", DateTimeOffset.UtcNow),
+            new RestaurantTable("Barra 1", 2, "Disponible", "", DateTimeOffset.UtcNow),
+            new RestaurantTable("Barra 2", 2, "Fuera de servicio", "", DateTimeOffset.UtcNow)
+        };
+
+        foreach (var table in seed)
+        {
+            await SaveTableAsync(table);
+        }
+    }
+
+    private async Task SaveTableAsync(RestaurantTable table)
+    {
+        await _session.ExecuteAsync(new SimpleStatement("""
+            INSERT INTO restaurant_tables (restaurant_id, table_name, capacity, status, assigned_employee, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            RestaurantId,
+            table.TableName,
+            table.Capacity,
+            table.Status,
+            table.AssignedEmployee,
+            table.UpdatedAt));
+    }
+
     public async Task<MenuItem> UpsertMenuItemAsync(Guid? itemId, UpsertMenuItemRequest request)
     {
         var now = DateTimeOffset.UtcNow;
         var id = itemId ?? Guid.NewGuid();
 
         await _session.ExecuteAsync(new SimpleStatement("""
-            INSERT INTO menu_items (restaurant_id, item_id, name, category, price, is_available, prep_minutes, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO menu_items (restaurant_id, item_id, name, category, price, is_available, prep_minutes, ingredients_json, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             RestaurantId,
             id,
@@ -251,6 +338,14 @@ public sealed class OperationsRepository
             request.PrepMinutes,
             now,
             request.Ingredients ?? []);
+    }
+
+    public async Task DeleteMenuItemAsync(Guid itemId)
+    {
+        await _session.ExecuteAsync(new SimpleStatement(
+            "DELETE FROM menu_items WHERE restaurant_id = ? AND item_id = ?",
+            RestaurantId,
+            itemId));
     }
 
     public async Task<IReadOnlyList<MenuCategory>> GetMenuCategoriesAsync()
@@ -381,7 +476,7 @@ public sealed class OperationsRepository
     public async Task<IReadOnlyList<Reservation>> GetReservationsAsync(string businessDate)
     {
         var rows = await _session.ExecuteAsync(new SimpleStatement("""
-            SELECT reservation_id, business_date, customer_id, customer_name, customer_phone, party_size, reservation_time,
+            SELECT reservation_id, business_date, customer_id, customer_name, customer_phone, table_name, party_size, reservation_time,
                    status, notes, order_id, created_at, updated_at
             FROM reservations_by_day
             WHERE restaurant_id = ? AND business_date = ?
@@ -393,7 +488,7 @@ public sealed class OperationsRepository
     public async Task<Reservation?> GetReservationAsync(Guid reservationId)
     {
         var rows = await _session.ExecuteAsync(new SimpleStatement("""
-            SELECT reservation_id, business_date, customer_id, customer_name, customer_phone, party_size, reservation_time,
+            SELECT reservation_id, business_date, customer_id, customer_name, customer_phone, table_name, party_size, reservation_time,
                    status, notes, order_id, created_at, updated_at
             FROM reservations_by_id
             WHERE restaurant_id = ? AND reservation_id = ?
@@ -412,6 +507,7 @@ public sealed class OperationsRepository
             request.CustomerId,
             request.CustomerName.Trim(),
             request.CustomerPhone.Trim(),
+            request.TableName.Trim(),
             request.PartySize,
             reservationTime,
             "Pendiente",
@@ -518,6 +614,45 @@ public sealed class OperationsRepository
         return customer;
     }
 
+    public async Task<Customer?> UpdateCustomerAsync(Guid customerId, UpdateCustomerRequest request)
+    {
+        var existing = (await GetCustomersAsync()).FirstOrDefault(customer => customer.CustomerId == customerId);
+        if (existing is null)
+        {
+            return null;
+        }
+
+        var updated = existing with
+        {
+            Name = request.Name.Trim(),
+            Phone = request.Phone.Trim(),
+            Nit = string.IsNullOrWhiteSpace(request.Nit) ? "0" : request.Nit.Trim(),
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        await _session.ExecuteAsync(new SimpleStatement("""
+            INSERT INTO customers (restaurant_id, customer_id, name, phone, nit, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            RestaurantId,
+            updated.CustomerId,
+            updated.Name,
+            updated.Phone,
+            updated.Nit,
+            updated.CreatedAt,
+            updated.UpdatedAt));
+
+        return updated;
+    }
+
+    public async Task DeleteCustomerAsync(Guid customerId)
+    {
+        await _session.ExecuteAsync(new SimpleStatement(
+            "DELETE FROM customers WHERE restaurant_id = ? AND customer_id = ?",
+            RestaurantId,
+            customerId));
+    }
+
     private async Task SaveTicketAsync(KitchenTicket ticket)
     {
         var itemsJson = JsonSerializer.Serialize(ticket.Items);
@@ -560,8 +695,8 @@ public sealed class OperationsRepository
         await _session.ExecuteAsync(new SimpleStatement("""
             INSERT INTO reservations_by_day
             (restaurant_id, business_date, reservation_time, reservation_id, customer_id, customer_name, customer_phone,
-             party_size, status, notes, order_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             table_name, party_size, status, notes, order_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             RestaurantId,
             reservation.BusinessDate,
@@ -570,6 +705,7 @@ public sealed class OperationsRepository
             reservation.CustomerId,
             reservation.CustomerName,
             reservation.CustomerPhone,
+            reservation.TableName,
             reservation.PartySize,
             reservation.Status,
             reservation.Notes,
@@ -580,8 +716,8 @@ public sealed class OperationsRepository
         await _session.ExecuteAsync(new SimpleStatement("""
             INSERT INTO reservations_by_id
             (restaurant_id, reservation_id, business_date, reservation_time, customer_id, customer_name, customer_phone,
-             party_size, status, notes, order_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             table_name, party_size, status, notes, order_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             RestaurantId,
             reservation.ReservationId,
@@ -590,6 +726,7 @@ public sealed class OperationsRepository
             reservation.CustomerId,
             reservation.CustomerName,
             reservation.CustomerPhone,
+            reservation.TableName,
             reservation.PartySize,
             reservation.Status,
             reservation.Notes,
@@ -657,12 +794,23 @@ public sealed class OperationsRepository
             GetOptionalGuid(row, "customer_id"),
             row.GetValue<string>("customer_name"),
             row.GetValue<string>("customer_phone"),
+            GetOptionalString(row, "table_name", string.Empty),
             row.GetValue<int>("party_size"),
             row.GetValue<DateTimeOffset>("reservation_time"),
             row.GetValue<string>("status"),
             row.GetValue<string>("notes"),
             GetNullableGuid(row, "order_id"),
             row.GetValue<DateTimeOffset>("created_at"),
+            row.GetValue<DateTimeOffset>("updated_at"));
+    }
+
+    private static RestaurantTable MapTable(Row row)
+    {
+        return new RestaurantTable(
+            row.GetValue<string>("table_name"),
+            row.GetValue<int>("capacity"),
+            row.GetValue<string>("status"),
+            row.GetValue<string>("assigned_employee") ?? string.Empty,
             row.GetValue<DateTimeOffset>("updated_at"));
     }
 
@@ -722,5 +870,23 @@ public sealed class OperationsRepository
         {
             return null;
         }
+    }
+
+    private static string GetOptionalString(Row row, string column, string fallback)
+    {
+        try
+        {
+            return row.GetValue<string>(column) ?? fallback;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    private static int TableSortKey(string tableName)
+    {
+        var digits = new string(tableName.Where(char.IsDigit).ToArray());
+        return int.TryParse(digits, out var result) ? result : 1000;
     }
 }

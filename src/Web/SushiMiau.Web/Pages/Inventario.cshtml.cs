@@ -28,6 +28,9 @@ public sealed class InventarioModel : PageModel
     [BindProperty]
     public NotificationForm Notification { get; set; } = new();
 
+    [BindProperty]
+    public DeleteForm Delete { get; set; } = new();
+
     [TempData]
     public string? Flash { get; set; }
 
@@ -47,6 +50,28 @@ public sealed class InventarioModel : PageModel
         {
             await _client.AddInventoryItemAsync(new UpsertInventoryItemRequest(Ingredient.Name, Ingredient.Category, Ingredient.Unit, Ingredient.Stock, Ingredient.MinimumStock, Ingredient.Supplier));
             Flash = "Ingrediente guardado.";
+        });
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostUpdateAsync()
+    {
+        await RunAsync(async () =>
+        {
+            await _client.UpdateInventoryItemAsync(Ingredient.ItemId, new UpsertInventoryItemRequest(Ingredient.Name, Ingredient.Category, Ingredient.Unit, Ingredient.Stock, Ingredient.MinimumStock, Ingredient.Supplier));
+            Flash = "Ingrediente actualizado.";
+        });
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostDeleteAsync()
+    {
+        await RunAsync(async () =>
+        {
+            await _client.DeleteInventoryItemAsync(Delete.Id);
+            Flash = "Ingrediente eliminado.";
         });
 
         return RedirectToPage();

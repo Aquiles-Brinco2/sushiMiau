@@ -25,24 +25,32 @@
     </form>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Fecha</th><th>Hora</th><th>Cliente</th><th>Personas</th><th>Estado</th><th>Notas</th><th>Accion</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Hora</th><th>Mesa</th><th>Cliente</th><th>Personas</th><th>Estado</th><th>Notas</th><th>Accion</th></tr></thead>
             <tbody>
             @foreach (var reservation in Model.Reservations)
             {
                 <tr class="@(reservation.Status == "Cancelada" ? "status-cancelled" : "")">
                     <td>@reservation.BusinessDate</td>
                     <td>@reservation.ReservationTime.ToLocalTime().ToString("HH:mm")</td>
+                    <td>@reservation.TableName</td>
                     <td><strong>@reservation.CustomerName</strong><br /><span class="muted">@reservation.CustomerPhone</span></td>
                     <td>@reservation.PartySize</td>
                     <td><span class="badge @(reservation.Status == "Cancelada" ? "alert-badge" : "ok")">@reservation.Status</span></td>
                     <td>@reservation.Notes</td>
                     <td>
-                        <form method="post" asp-page-handler="Status" class="inline-actions">
-                            <input type="hidden" asp-for="ReservationStatus.ReservationId" value="@reservation.ReservationId" />
-                            <button name="ReservationStatus.Status" value="Confirmada" type="submit">Confirmar</button>
-                            <button name="ReservationStatus.Status" value="Completada" type="submit">Completar</button>
-                            <button name="ReservationStatus.Status" value="Cancelada" type="submit">Cancelar</button>
-                        </form>
+                        @if (Model.CanEditSelectedDate)
+                        {
+                            <form method="post" asp-page-handler="Status" class="inline-actions">
+                                <input type="hidden" asp-for="ReservationStatus.ReservationId" value="@reservation.ReservationId" />
+                                <button name="ReservationStatus.Status" value="Confirmada" type="submit">Confirmar</button>
+                                <button name="ReservationStatus.Status" value="Completada" type="submit">Completar</button>
+                                <button name="ReservationStatus.Status" value="Cancelada" type="submit">Cancelar</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <span class="badge @(reservation.Status == "Cancelada" ? "cancelled" : "off")">Ultimo estado: @reservation.Status</span>
+                        }
                     </td>
                 </tr>
             }
@@ -57,6 +65,7 @@
         <label>Cliente <input asp-for="Reservation.CustomerName" list="customers" required /></label>
         <button type="button" class="secondary-button" data-dialog-open="#createCustomer">Registrar cliente</button>
         <label>Telefono <input asp-for="Reservation.CustomerPhone" required /></label>
+        <label>Mesa <input asp-for="Reservation.TableName" list="tables" required /></label>
         <label>Personas <input asp-for="Reservation.PartySize" type="number" min="1" required /></label>
         <label>Fecha y hora <input asp-for="Reservation.ReservationTime" type="datetime-local" required /></label>
         <label>Notas <textarea asp-for="Reservation.Notes" rows="3"></textarea></label>
@@ -88,6 +97,12 @@
     @foreach (var customer in Model.Customers)
     {
         <option value="@customer.Name"></option>
+    }
+</datalist>
+<datalist id="tables">
+    @foreach (var table in Model.Tables)
+    {
+        <option value="@table.TableName"></option>
     }
 </datalist>
 <datalist id="reservationStatuses"><option value="Pendiente"></option><option value="Confirmada"></option><option value="Completada"></option><option value="Cancelada"></option></datalist>

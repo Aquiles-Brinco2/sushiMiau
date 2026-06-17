@@ -27,6 +27,9 @@ public sealed class MenuModel : PageModel
     [BindProperty]
     public InventoryItemForm Ingredient { get; set; } = new();
 
+    [BindProperty]
+    public DeleteForm Delete { get; set; } = new();
+
     [TempData]
     public string? Flash { get; set; }
 
@@ -61,6 +64,21 @@ public sealed class MenuModel : PageModel
         {
             await _client.UpdateMenuItemAsync(MenuItem.ItemId, ToRequest(MenuItem));
             Flash = "Producto actualizado.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Operacion no completada: {ex.Message}";
+        }
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostDeleteAsync()
+    {
+        try
+        {
+            await _client.DeleteMenuItemAsync(Delete.Id);
+            Flash = "Producto eliminado.";
         }
         catch (Exception ex)
         {

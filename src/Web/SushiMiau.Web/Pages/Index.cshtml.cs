@@ -15,6 +15,7 @@ public class IndexModel : PageModel
     }
 
     public RestaurantDashboard Dashboard { get; private set; } = EmptyDashboard();
+    public IReadOnlyList<TablePanelItem> Tables { get; private set; } = [];
 
     [TempData]
     public string? Flash { get; set; }
@@ -45,6 +46,9 @@ public class IndexModel : PageModel
 
     [BindProperty]
     public TicketStatusForm TicketStatus { get; set; } = new();
+
+    [BindProperty]
+    public TableStateForm TableState { get; set; } = new();
 
     public async Task OnGetAsync()
     {
@@ -171,17 +175,107 @@ public class IndexModel : PageModel
         return RedirectToPage();
     }
 
+    public async Task<IActionResult> OnPostTableStateAsync()
+    {
+        await ExecuteAndRedirectAsync(async () =>
+        {
+            var employee = TableState.Status.Equals("Ocupada", StringComparison.OrdinalIgnoreCase)
+                ? User.Identity?.Name ?? "Operador"
+                : TableState.AssignedEmployee;
+            if (TableState.Status.Equals("Disponible", StringComparison.OrdinalIgnoreCase))
+            {
+                if (TableState.OrderId.HasValue)
+                {
+                    await _client.UpdateOrderStatusAsync(TableState.OrderId.Value, "Pagado");
+                }
+
+                if (TableState.ReservationId.HasValue)
+                {
+                    await _client.UpdateReservationStatusAsync(TableState.ReservationId.Value, "Cancelada");
+                }
+            }
+
+            await _client.UpdateTableStateAsync(TableState.TableName, new UpdateTableStateRequest(TableState.Status, employee));
+            Flash = $"Mesa {TableState.TableName} actualizada.";
+        });
+
+        return RedirectToPage();
+    }
+
     private async Task LoadDashboardAsync()
     {
         try
         {
             Dashboard = await _client.GetDashboardAsync();
+            var tables = await _client.GetTablesAsync();
+            Tables = BuildTablePanel(tables, Dashboard.Orders, Dashboard.Reservations);
         }
         catch (Exception ex)
         {
             Dashboard = EmptyDashboard();
+            Tables = [];
             ErrorMessage = $"No se pudo cargar la informacion de los microservicios: {ex.Message}";
         }
+    }
+
+    private static IReadOnlyList<TablePanelItem> BuildTablePanel(
+        IReadOnlyList<RestaurantTable> tables,
+        IReadOnlyList<RestaurantOrder> orders,
+        IReadOnlyList<Reservation> reservations)
+    {
+        var activeOrders = orders
+            .Where(order => !order.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase))
+            .Where(order => order.Status is not "Pagado" and not "Cancelado")
+            .ToList();
+        var activeReservations = reservations
+            .Where(reservation => reservation.Status is not "Cancelada" and not "Completada")
+            .ToList();
+
+        return tables.Select(table =>
+        {
+            var order = activeOrders.FirstOrDefault(item => item.TableOrChannel.Equals(table.TableName, StringComparison.OrdinalIgnoreCase));
+            var reservation = activeReservations.FirstOrDefault(item => item.TableName.Equals(table.TableName, StringComparison.OrdinalIgnoreCase));
+            var status = table.Status;
+            if (status.Equals("Fuera de servicio", StringComparison.OrdinalIgnoreCase))
+            {
+                return CreateTablePanelItem(table, "Fuera de servicio", order, reservation);
+            }
+
+            if (order is not null)
+            {
+                return CreateTablePanelItem(table, "Ocupada", order, reservation);
+            }
+
+            if (reservation is not null)
+            {
+                return CreateTablePanelItem(table, "Reservada", order, reservation);
+            }
+
+            if (status.Equals("Ocupada", StringComparison.OrdinalIgnoreCase))
+            {
+                return CreateTablePanelItem(table, "Ocupada", order, reservation);
+            }
+
+            return CreateTablePanelItem(table, "Disponible", order, reservation);
+        }).ToList();
+    }
+
+    private static TablePanelItem CreateTablePanelItem(RestaurantTable table, string status, RestaurantOrder? order, Reservation? reservation)
+    {
+        var reserveStart = reservation?.ReservationTime.ToLocalTime();
+        return new TablePanelItem(
+            table.TableName,
+            table.Capacity,
+            status,
+            string.IsNullOrWhiteSpace(table.AssignedEmployee) ? order?.ServerName ?? "Sin asignar" : table.AssignedEmployee,
+            order?.OrderId,
+            order?.Status ?? string.Empty,
+            order?.Total ?? 0,
+            reservation?.ReservationId,
+            reservation?.CustomerName ?? string.Empty,
+            reservation?.PartySize,
+            reserveStart,
+            reserveStart?.AddHours(2));
     }
 
     private async Task ExecuteAndRedirectAsync(Func<Task> action)
@@ -228,6 +322,7 @@ public class IndexModel : PageModel
 
 public sealed class InventoryItemForm
 {
+    public Guid ItemId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Category { get; set; } = "Pescados";
     public string Unit { get; set; } = "kg";
@@ -273,6 +368,10 @@ public sealed class OrderForm
 {
     public string TableOrChannel { get; set; } = string.Empty;
     public string ServerName { get; set; } = string.Empty;
+    public string PaymentMethod { get; set; } = "Pendiente";
+    public string BillingName { get; set; } = "Consumidor Final";
+    public string TaxId { get; set; } = "0";
+    public List<OrderLineForm> Lines { get; set; } = [new()];
     public string Item1Name { get; set; } = string.Empty;
     public int Item1Quantity { get; set; } = 1;
     public decimal Item1Price { get; set; }
@@ -282,6 +381,12 @@ public sealed class OrderForm
     public string Item3Name { get; set; } = string.Empty;
     public int Item3Quantity { get; set; }
     public decimal Item3Price { get; set; }
+    public string Item4Name { get; set; } = string.Empty;
+    public int Item4Quantity { get; set; }
+    public decimal Item4Price { get; set; }
+    public string Item5Name { get; set; } = string.Empty;
+    public int Item5Quantity { get; set; }
+    public decimal Item5Price { get; set; }
 }
 
 public sealed class PaymentForm
@@ -290,6 +395,33 @@ public sealed class PaymentForm
     public string PaymentMethod { get; set; } = "Efectivo";
     public string BillingName { get; set; } = "Consumidor Final";
     public string TaxId { get; set; } = "0";
+}
+
+public sealed class OrderEditForm
+{
+    public Guid OrderId { get; set; }
+    public string TableOrChannel { get; set; } = string.Empty;
+    public string ServerName { get; set; } = string.Empty;
+    public string Status { get; set; } = "Preparando";
+    public string DeliveryStatus { get; set; } = "Preparando";
+    public string CustomerName { get; set; } = string.Empty;
+    public string CustomerPhone { get; set; } = string.Empty;
+    public string DeliveryAddress { get; set; } = string.Empty;
+    public string Item1Name { get; set; } = string.Empty;
+    public int Item1Quantity { get; set; } = 1;
+    public decimal Item1Price { get; set; }
+    public string Item2Name { get; set; } = string.Empty;
+    public int Item2Quantity { get; set; }
+    public decimal Item2Price { get; set; }
+    public string Item3Name { get; set; } = string.Empty;
+    public int Item3Quantity { get; set; }
+    public decimal Item3Price { get; set; }
+    public string Item4Name { get; set; } = string.Empty;
+    public int Item4Quantity { get; set; }
+    public decimal Item4Price { get; set; }
+    public string Item5Name { get; set; } = string.Empty;
+    public int Item5Quantity { get; set; }
+    public decimal Item5Price { get; set; }
 }
 
 public sealed class ShiftForm
@@ -313,6 +445,7 @@ public sealed class ReservationForm
     public Guid CustomerId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
+    public string TableName { get; set; } = "Mesa 1";
     public int PartySize { get; set; } = 2;
     public DateTime ReservationTime { get; set; } = DateTime.Now.Date.AddHours(20);
     public string Notes { get; set; } = string.Empty;
@@ -331,18 +464,38 @@ public sealed class DeliveryOrderForm
     public string CustomerPhone { get; set; } = string.Empty;
     public string DeliveryAddress { get; set; } = string.Empty;
     public string ServerName { get; set; } = string.Empty;
+    public string PaymentMethod { get; set; } = "Pendiente";
+    public string BillingName { get; set; } = "Consumidor Final";
+    public string TaxId { get; set; } = "0";
+    public List<OrderLineForm> Lines { get; set; } = [new()];
     public string Item1Name { get; set; } = string.Empty;
     public int Item1Quantity { get; set; } = 1;
     public decimal Item1Price { get; set; }
     public string Item2Name { get; set; } = string.Empty;
     public int Item2Quantity { get; set; }
     public decimal Item2Price { get; set; }
+    public string Item3Name { get; set; } = string.Empty;
+    public int Item3Quantity { get; set; }
+    public decimal Item3Price { get; set; }
+    public string Item4Name { get; set; } = string.Empty;
+    public int Item4Quantity { get; set; }
+    public decimal Item4Price { get; set; }
+    public string Item5Name { get; set; } = string.Empty;
+    public int Item5Quantity { get; set; }
+    public decimal Item5Price { get; set; }
 }
 
 public sealed class DeliveryStatusForm
 {
     public Guid OrderId { get; set; }
     public string DeliveryStatus { get; set; } = "En ruta";
+}
+
+public sealed class OrderLineForm
+{
+    public string ItemName { get; set; } = string.Empty;
+    public int Quantity { get; set; } = 1;
+    public decimal UnitPrice { get; set; }
 }
 
 public sealed class NotificationForm
@@ -373,6 +526,7 @@ public sealed class UserUpdateForm
 
 public sealed class CustomerForm
 {
+    public Guid CustomerId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public string Nit { get; set; } = "0";
@@ -382,3 +536,31 @@ public sealed class CategoryForm
 {
     public string Name { get; set; } = string.Empty;
 }
+
+public sealed class DeleteForm
+{
+    public Guid Id { get; set; }
+}
+
+public sealed class TableStateForm
+{
+    public string TableName { get; set; } = string.Empty;
+    public string Status { get; set; } = "Disponible";
+    public string AssignedEmployee { get; set; } = string.Empty;
+    public Guid? OrderId { get; set; }
+    public Guid? ReservationId { get; set; }
+}
+
+public sealed record TablePanelItem(
+    string TableName,
+    int Capacity,
+    string Status,
+    string AssignedEmployee,
+    Guid? OrderId,
+    string OrderStatus,
+    decimal OrderTotal,
+    Guid? ReservationId,
+    string ReservationCustomer,
+    int? ReservationPartySize,
+    DateTimeOffset? ReservationStartsAt,
+    DateTimeOffset? ReservationEndsAt);

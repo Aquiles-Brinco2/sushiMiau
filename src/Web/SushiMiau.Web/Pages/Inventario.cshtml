@@ -26,7 +26,7 @@
         <div class="panel-heading"><h2>Inventario actual</h2></div>
         <div class="table-wrap">
             <table>
-                <thead><tr><th>Item</th><th>Categoria</th><th>Stock</th><th>Minimo</th><th>Proveedor</th><th>Accion</th></tr></thead>
+                <thead><tr><th>Item</th><th>Categoria</th><th>Stock</th><th>Minimo</th><th>Proveedor</th><th>Acciones</th></tr></thead>
                 <tbody>
                 @foreach (var item in Model.Items)
                 {
@@ -36,8 +36,26 @@
                         <td>@item.Stock.ToString("0.##") @item.Unit</td>
                         <td>@item.MinimumStock.ToString("0.##") @item.Unit</td>
                         <td>@item.Supplier</td>
-                        <td>
+                        <td class="inline-actions">
+                            <button type="button" class="secondary-button" data-dialog-open="#edit-ingredient-@item.ItemId">Editar</button>
                             <button type="button" class="secondary-button" data-dialog-open="#notify-@item.ItemId">Notificar</button>
+                            <form method="post" asp-page-handler="Delete" data-confirm="Esta seguro?">
+                                <input type="hidden" asp-for="Delete.Id" value="@item.ItemId" />
+                                <button type="submit" class="danger-button">Eliminar</button>
+                            </form>
+                            <dialog id="edit-ingredient-@item.ItemId">
+                                <div class="dialog-head"><h2>Editar ingrediente</h2><button type="button" data-dialog-close>x</button></div>
+                                <form method="post" asp-page-handler="Update" class="dialog-body form-box">
+                                    <input type="hidden" asp-for="Ingredient.ItemId" value="@item.ItemId" />
+                                    <label>Nombre <input asp-for="Ingredient.Name" value="@item.Name" required /></label>
+                                    <label>Categoria <input asp-for="Ingredient.Category" list="inventoryCategories" value="@item.Category" required /></label>
+                                    <label>Unidad <input asp-for="Ingredient.Unit" list="units" value="@item.Unit" required /></label>
+                                    <label>Stock <input asp-for="Ingredient.Stock" type="number" step="0.01" value="@item.Stock" required /></label>
+                                    <label>Minimo <input asp-for="Ingredient.MinimumStock" type="number" step="0.01" value="@item.MinimumStock" required /></label>
+                                    <label>Proveedor <input asp-for="Ingredient.Supplier" value="@item.Supplier" required /></label>
+                                    <button type="submit">Guardar cambios</button>
+                                </form>
+                            </dialog>
                             <dialog id="notify-@item.ItemId">
                                 <div class="dialog-head"><h2>Nueva notificacion</h2><button type="button" data-dialog-close>x</button></div>
                                 <form method="post" asp-page-handler="Notify" class="dialog-body form-box">

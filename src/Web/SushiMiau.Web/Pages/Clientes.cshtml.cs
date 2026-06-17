@@ -19,6 +19,9 @@ public sealed class ClientesModel : PageModel
     [BindProperty]
     public CustomerForm Customer { get; set; } = new();
 
+    [BindProperty]
+    public DeleteForm Delete { get; set; } = new();
+
     [TempData]
     public string? Flash { get; set; }
 
@@ -43,6 +46,36 @@ public sealed class ClientesModel : PageModel
         {
             await _client.AddCustomerAsync(new CreateCustomerRequest(Customer.Name, Customer.Phone, Customer.Nit));
             Flash = "Cliente registrado.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Operacion no completada: {ex.Message}";
+        }
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostUpdateAsync()
+    {
+        try
+        {
+            await _client.UpdateCustomerAsync(Customer.CustomerId, new UpdateCustomerRequest(Customer.Name, Customer.Phone, Customer.Nit));
+            Flash = "Cliente actualizado.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Operacion no completada: {ex.Message}";
+        }
+
+        return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostDeleteAsync()
+    {
+        try
+        {
+            await _client.DeleteCustomerAsync(Delete.Id);
+            Flash = "Cliente eliminado.";
         }
         catch (Exception ex)
         {

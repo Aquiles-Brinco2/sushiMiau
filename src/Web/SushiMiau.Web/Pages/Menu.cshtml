@@ -28,7 +28,13 @@
                     <td>Bs @item.Price.ToString("0.00")</td>
                     <td><span class="badge @(item.IsAvailable ? "ok" : "off")">@(item.IsAvailable ? "Disponible" : "Pausado")</span></td>
                     <td>@string.Join(", ", item.Ingredients.Select(i => $"{i.Quantity:0.##} {i.Unit} {i.InventoryItemName}"))</td>
-                    <td><button type="button" class="secondary-button" data-dialog-open="#edit-@item.ItemId">Editar</button></td>
+                    <td class="inline-actions">
+                        <button type="button" class="secondary-button" data-dialog-open="#edit-@item.ItemId">Editar</button>
+                        <form method="post" asp-page-handler="Delete" data-confirm="Esta seguro?">
+                            <input type="hidden" asp-for="Delete.Id" value="@item.ItemId" />
+                            <button type="submit" class="danger-button">Eliminar</button>
+                        </form>
+                    </td>
                 </tr>
             }
             </tbody>

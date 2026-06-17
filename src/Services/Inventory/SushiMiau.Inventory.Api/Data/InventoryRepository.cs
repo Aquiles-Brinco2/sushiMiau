@@ -200,6 +200,14 @@ public sealed class InventoryRepository
         return movement;
     }
 
+    public async Task DeleteItemAsync(Guid itemId)
+    {
+        await _session.ExecuteAsync(new SimpleStatement(
+            "DELETE FROM inventory_items WHERE restaurant_id = ? AND item_id = ?",
+            RestaurantId,
+            itemId));
+    }
+
     private static InventoryItem MapItem(Row row)
     {
         var updatedAt = row.GetValue<DateTimeOffset>("updated_at");

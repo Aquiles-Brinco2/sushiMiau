@@ -75,6 +75,7 @@ public sealed record Reservation(
     Guid CustomerId,
     string CustomerName,
     string CustomerPhone,
+    string TableName,
     int PartySize,
     DateTimeOffset ReservationTime,
     string Status,
@@ -87,12 +88,24 @@ public sealed record CreateReservationRequest(
     Guid CustomerId,
     string CustomerName,
     string CustomerPhone,
+    string TableName,
     int PartySize,
     DateTimeOffset ReservationTime,
     string Notes,
     Guid? OrderId = null);
 
 public sealed record UpdateReservationStatusRequest(string Status);
+
+public sealed record RestaurantTable(
+    string TableName,
+    int Capacity,
+    string Status,
+    string AssignedEmployee,
+    DateTimeOffset UpdatedAt);
+
+public sealed record UpdateTableStateRequest(
+    string Status,
+    string AssignedEmployee = "");
 
 public sealed record NotificationMessage(
     Guid NotificationId,
@@ -118,6 +131,11 @@ public sealed record Customer(
     DateTimeOffset UpdatedAt);
 
 public sealed record CreateCustomerRequest(
+    string Name,
+    string Phone,
+    string Nit);
+
+public sealed record UpdateCustomerRequest(
     string Name,
     string Phone,
     string Nit);

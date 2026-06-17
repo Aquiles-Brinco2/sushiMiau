@@ -61,6 +61,12 @@ app.MapPost("/api/inventory/items", async (UpsertInventoryItemRequest request, I
 app.MapPut("/api/inventory/items/{itemId:guid}", async (Guid itemId, UpsertInventoryItemRequest request, InventoryRepository repo) =>
     Results.Ok(await repo.UpsertItemAsync(itemId, request)));
 
+app.MapDelete("/api/inventory/items/{itemId:guid}", async (Guid itemId, InventoryRepository repo) =>
+{
+    await repo.DeleteItemAsync(itemId);
+    return Results.NoContent();
+});
+
 app.MapPost("/api/inventory/items/{itemId:guid}/movements", async (Guid itemId, RecordStockMovementRequest request, InventoryRepository repo) =>
 {
     var movement = await repo.RecordMovementAsync(itemId, request);

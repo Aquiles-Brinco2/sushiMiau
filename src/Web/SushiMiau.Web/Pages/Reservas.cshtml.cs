@@ -17,10 +17,12 @@ public sealed class ReservasModel : PageModel
     public IReadOnlyList<Reservation> Reservations { get; private set; } = [];
     public IReadOnlyList<Customer> Customers { get; private set; } = [];
     public IReadOnlyList<MenuItem> Menu { get; private set; } = [];
+    public IReadOnlyList<RestaurantTable> Tables { get; private set; } = [];
     public string? FilterDate { get; set; }
     public string? FilterStatus { get; set; }
     public string? FilterHour { get; set; }
     public string? FilterCustomer { get; set; }
+    public bool CanEditSelectedDate => FilterDate == Today();
 
     [BindProperty]
     public ReservationForm Reservation { get; set; } = new();
@@ -40,7 +42,7 @@ public sealed class ReservasModel : PageModel
     [TempData]
     public string? ErrorMessage { get; set; }
 
-    public async Task OnGetAsync(string? date, string? status, string? hour, string? customer)
+    public async Task OnGetAsync(string? date, string? status, string? hour, string? customer, string? table)
     {
         try
         {
@@ -50,6 +52,11 @@ public sealed class ReservasModel : PageModel
             FilterCustomer = customer;
             Customers = await _client.GetCustomersAsync();
             Menu = await _client.GetMenuAsync();
+            Tables = await _client.GetTablesAsync();
+            if (!string.IsNullOrWhiteSpace(table))
+            {
+                Reservation.TableName = table;
+            }
             var reservations = await _client.GetReservationsAsync(FilterDate);
             Reservations = reservations
                 .Where(item => string.IsNullOrWhiteSpace(status) || item.Status.Equals(status, StringComparison.OrdinalIgnoreCase))
@@ -78,7 +85,7 @@ public sealed class ReservasModel : PageModel
             if (!string.IsNullOrWhiteSpace(OptionalOrder.Item1Name))
             {
                 var order = await _client.AddOrderAsync(new CreateOrderRequest(
-                    $"Reserva {Reservation.CustomerName}",
+                    Reservation.TableName,
                     OptionalOrder.ServerName,
                     CreateLines(OptionalOrder.Item1Name, OptionalOrder.Item1Quantity, OptionalOrder.Item1Price, OptionalOrder.Item2Name, OptionalOrder.Item2Quantity, OptionalOrder.Item2Price),
                     "Mesa",
@@ -91,6 +98,7 @@ public sealed class ReservasModel : PageModel
                 customer?.CustomerId ?? Guid.Empty,
                 Reservation.CustomerName,
                 Reservation.CustomerPhone,
+                Reservation.TableName,
                 Reservation.PartySize,
                 new DateTimeOffset(Reservation.ReservationTime),
                 Reservation.Notes,
