@@ -194,7 +194,17 @@ public sealed class IdentityRepository
 
     private static string NormalizeRole(string role)
     {
-        var allowed = new[] { AppRoles.Admin, AppRoles.Owner, AppRoles.Manager, AppRoles.Kitchen, AppRoles.Cashier, AppRoles.Inventory };
+        var allowed = new[]
+        {
+            AppRoles.Admin,
+            AppRoles.Owner,
+            AppRoles.Manager,
+            AppRoles.Kitchen,
+            AppRoles.Cashier,
+            AppRoles.Inventory,
+            AppRoles.Waiter,
+            AppRoles.Delivery
+        };
 
         return allowed.FirstOrDefault(item => item.Equals(role.Trim(), StringComparison.OrdinalIgnoreCase))
             ?? AppRoles.Manager;

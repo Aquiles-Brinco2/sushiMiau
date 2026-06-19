@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using SushiMiau.Shared;
 using SushiMiau.Shared.Contracts;
 using SushiMiau.Web.Services;
 
@@ -17,6 +18,7 @@ public sealed class DeliveryModel : PageModel
     public IReadOnlyList<RestaurantOrder> Orders { get; private set; } = [];
     public IReadOnlyList<Customer> Customers { get; private set; } = [];
     public IReadOnlyList<MenuItem> Menu { get; private set; } = [];
+    public string OperatorName => User.Identity?.Name ?? "Operador";
 
     [BindProperty]
     public DeliveryOrderForm DeliveryOrder { get; set; } = new();
@@ -47,12 +49,18 @@ public sealed class DeliveryModel : PageModel
         {
             Menu = await _client.GetMenuAsync();
             var lines = CreateLinesFromMenu(DeliveryOrder.Lines, Menu);
+            Customers = await _client.GetCustomersAsync();
+            var customer = Customers.First(item => item.CustomerId == DeliveryOrder.CustomerId);
 
             var order = await _client.AddDeliveryOrderAsync(new CreateDeliveryOrderRequest(
-                DeliveryOrder.CustomerName,
-                DeliveryOrder.CustomerPhone,
+                customer.CustomerId,
+                customer.Name,
+                customer.Phone,
                 DeliveryOrder.DeliveryAddress,
-                DeliveryOrder.ServerName,
+                DeliveryOrder.DeliveryReference,
+                DeliveryOrder.DeliveryFee,
+                OperatorName,
+                DeliveryOrder.Notes,
                 lines));
 
             if (order is not null && IsPaid(DeliveryOrder.PaymentMethod))
@@ -83,12 +91,14 @@ public sealed class DeliveryModel : PageModel
     {
         await RunAsync(async () =>
         {
-            var lines = CreateLines(
+            Menu = await _client.GetMenuAsync();
+            var lines = CreateLinesFromMenu(CreateLines(
                 EditOrder.Item1Name, EditOrder.Item1Quantity, EditOrder.Item1Price,
                 EditOrder.Item2Name, EditOrder.Item2Quantity, EditOrder.Item2Price,
                 EditOrder.Item3Name, EditOrder.Item3Quantity, EditOrder.Item3Price,
                 EditOrder.Item4Name, EditOrder.Item4Quantity, EditOrder.Item4Price,
-                EditOrder.Item5Name, EditOrder.Item5Quantity, EditOrder.Item5Price);
+                EditOrder.Item5Name, EditOrder.Item5Quantity, EditOrder.Item5Price)
+                .Select(line => new OrderLineForm { ItemName = line.ItemName, Quantity = line.Quantity }), Menu);
 
             await _client.UpdateOrderAsync(EditOrder.OrderId, new UpdateOrderRequest(
                 "Delivery",
@@ -98,7 +108,11 @@ public sealed class DeliveryModel : PageModel
                 EditOrder.CustomerName,
                 EditOrder.CustomerPhone,
                 EditOrder.DeliveryAddress,
-                EditOrder.DeliveryStatus));
+                EditOrder.DeliveryStatus,
+                EditOrder.CustomerId,
+                EditOrder.Notes,
+                EditOrder.DeliveryReference,
+                EditOrder.DeliveryFee));
             Flash = "Delivery actualizado.";
         });
 
@@ -171,5 +185,5 @@ public sealed class DeliveryModel : PageModel
             .ToList();
     }
 
-    private static string Today() => DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+    private static string Today() => BusinessClock.Today;
 }

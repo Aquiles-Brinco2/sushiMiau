@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using SushiMiau.Shared;
 using SushiMiau.Shared.Contracts;
 using SushiMiau.Web.Services;
 
@@ -15,9 +16,13 @@ public sealed class PedidosModel : PageModel
     }
 
     public IReadOnlyList<RestaurantOrder> TableOrders { get; private set; } = [];
+    public IReadOnlyList<RestaurantOrder> ActiveTableOrders { get; private set; } = [];
+    public IReadOnlyList<RestaurantOrder> ClosedTableOrders { get; private set; } = [];
     public IReadOnlyList<MenuItem> Menu { get; private set; } = [];
     public IReadOnlyList<RestaurantTable> Tables { get; private set; } = [];
+    public IReadOnlyList<Customer> Customers { get; private set; } = [];
     public string OperatorName => User.Identity?.Name ?? "Operador";
+    public bool ShowClosedOrders { get; private set; }
 
     [BindProperty]
     public OrderForm TableOrder { get; set; } = new();
@@ -34,8 +39,9 @@ public sealed class PedidosModel : PageModel
     [TempData]
     public string? ErrorMessage { get; set; }
 
-    public async Task OnGetAsync(string? table)
+    public async Task OnGetAsync(string? table, bool showClosed = false)
     {
+        ShowClosedOrders = showClosed;
         if (!string.IsNullOrWhiteSpace(table))
         {
             TableOrder.TableOrChannel = table;
@@ -50,12 +56,19 @@ public sealed class PedidosModel : PageModel
         {
             Menu = await _client.GetMenuAsync();
             var lines = CreateLinesFromMenu(TableOrder.Lines, Menu);
+            Customers = await _client.GetCustomersAsync();
+            var customer = Customers.FirstOrDefault(item => item.CustomerId == TableOrder.CustomerId);
 
             var order = await _client.AddOrderAsync(new CreateOrderRequest(
                 TableOrder.TableOrChannel,
                 OperatorName,
                 lines,
-                "Mesa"));
+                "Mesa",
+                customer?.CustomerId,
+                customer?.Name ?? string.Empty,
+                customer?.Phone ?? string.Empty,
+                "",
+                TableOrder.Notes));
 
             if (order is not null && IsPaid(TableOrder.PaymentMethod))
             {
@@ -74,18 +87,18 @@ public sealed class PedidosModel : PageModel
     {
         await RunAsync(async () =>
         {
-            var lines = CreateLines(
-                EditOrder.Item1Name, EditOrder.Item1Quantity, EditOrder.Item1Price,
-                EditOrder.Item2Name, EditOrder.Item2Quantity, EditOrder.Item2Price,
-                EditOrder.Item3Name, EditOrder.Item3Quantity, EditOrder.Item3Price,
-                EditOrder.Item4Name, EditOrder.Item4Quantity, EditOrder.Item4Price,
-                EditOrder.Item5Name, EditOrder.Item5Quantity, EditOrder.Item5Price);
+            var order = await GetTableOrderAsync(EditOrder.OrderId);
+            if (!CanModifyOrder(order))
+            {
+                throw new InvalidOperationException("Solo se pueden editar pedidos pendientes de mesa.");
+            }
 
             await _client.UpdateOrderAsync(EditOrder.OrderId, new UpdateOrderRequest(
                 EditOrder.TableOrChannel,
                 EditOrder.ServerName,
                 EditOrder.Status,
-                lines));
+                Array.Empty<OrderLine>(),
+                Notes: EditOrder.Notes));
             Flash = "Pedido actualizado.";
         });
 
@@ -96,6 +109,12 @@ public sealed class PedidosModel : PageModel
     {
         await RunAsync(async () =>
         {
+            var order = await GetTableOrderAsync(EditOrder.OrderId);
+            if (!CanModifyOrder(order))
+            {
+                throw new InvalidOperationException("Solo se pueden actualizar pedidos pendientes de mesa.");
+            }
+
             await _client.UpdateOrderStatusAsync(EditOrder.OrderId, EditOrder.Status);
             Flash = "Estado de pedido actualizado.";
         });
@@ -107,6 +126,12 @@ public sealed class PedidosModel : PageModel
     {
         await RunAsync(async () =>
         {
+            var order = await GetTableOrderAsync(Delete.Id);
+            if (!CanModifyOrder(order))
+            {
+                throw new InvalidOperationException("Solo se pueden cancelar pedidos pendientes de mesa.");
+            }
+
             await _client.DeleteOrderAsync(Delete.Id);
             Flash = "Pedido cancelado.";
         });
@@ -121,8 +146,17 @@ public sealed class PedidosModel : PageModel
             var today = Today();
             var orders = await _client.GetOrdersAsync(today);
             TableOrders = orders.Where(order => !order.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase)).ToList();
+            ActiveTableOrders = TableOrders
+                .Where(order => !order.Status.Equals("Pagado", StringComparison.OrdinalIgnoreCase)
+                    && !order.Status.Equals("Cancelado", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            ClosedTableOrders = TableOrders
+                .Where(order => order.Status.Equals("Pagado", StringComparison.OrdinalIgnoreCase)
+                    || order.Status.Equals("Cancelado", StringComparison.OrdinalIgnoreCase))
+                .ToList();
             Menu = await _client.GetMenuAsync();
             Tables = await _client.GetTablesAsync();
+            Customers = await _client.GetCustomersAsync();
         }
         catch (Exception ex)
         {
@@ -170,5 +204,18 @@ public sealed class PedidosModel : PageModel
             .ToList();
     }
 
-    private static string Today() => DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+    private static bool CanModifyOrder(RestaurantOrder order) =>
+        order.Status.Equals("Pendiente", StringComparison.OrdinalIgnoreCase);
+
+    private async Task<RestaurantOrder> GetTableOrderAsync(Guid orderId)
+    {
+        var today = Today();
+        var order = (await _client.GetOrdersAsync(today))
+            .FirstOrDefault(item => item.OrderId == orderId
+                && !item.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase));
+
+        return order ?? throw new InvalidOperationException("Pedido de mesa no encontrado.");
+    }
+
+    private static string Today() => BusinessClock.Today;
 }

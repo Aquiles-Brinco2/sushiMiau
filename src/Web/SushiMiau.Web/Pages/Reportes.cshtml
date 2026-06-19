@@ -14,7 +14,17 @@
 
 <section class="panel report-filters">
     <form method="get" class="filter-form">
+        <label>Periodo
+            <select name="period">
+                @foreach (var option in new[] { "Diario", "Semanal", "Mensual", "Personalizado" })
+                {
+                    <option value="@option" selected="@(option == Model.Period)">@option</option>
+                }
+            </select>
+        </label>
         <label>Fecha <input type="date" name="date" value="@Model.FilterDate" /></label>
+        <label>Desde <input type="date" name="fromDate" value="@Model.FromDate" /></label>
+        <label>Hasta <input type="date" name="toDate" value="@Model.ToDate" /></label>
         <label>Delivery <input name="deliveryStatus" list="deliveryStatuses" value="@Model.FilterDeliveryStatus" placeholder="Todos" /></label>
         <label>Reservas <input name="reservationStatus" list="reservationStatuses" value="@Model.FilterReservationStatus" placeholder="Todos" /></label>
         <label>Plato <input name="dish" list="dishNames" value="@Model.FilterDish" placeholder="Buscar plato" /></label>
@@ -30,8 +40,8 @@
 }
 
 <section class="metric-grid">
-    <article class="metric-card"><span>Ventas</span><strong>Bs @Model.Report.SalesTotal.ToString("0.00")</strong><small>@Model.Report.PaidOrders pedidos pagados</small></article>
-    <article class="metric-card"><span>Facturado</span><strong>Bs @Model.Report.InvoicedTotal.ToString("0.00")</strong><small>Facturacion del dia</small></article>
+    <article class="metric-card"><span>Ventas</span><strong>Bs @Model.Report.SalesTotal.ToString("0.00")</strong><small>@Model.Report.PaidOrders pedidos pagados, @Model.FromDate a @Model.ToDate</small></article>
+    <article class="metric-card"><span>Facturado</span><strong>Bs @Model.Report.InvoicedTotal.ToString("0.00")</strong><small>Facturacion del periodo</small></article>
     <article class="metric-card"><span>Delivery</span><strong>@Model.Report.OpenDeliveryOrders</strong><small>@Model.Report.DeliveryOrders pedidos filtrados</small></article>
     <article class="metric-card"><span>Reservas</span><strong>@Model.Report.OpenReservations</strong><small>@Model.Report.Reservations reservas filtradas</small></article>
     <article class="metric-card"><span>Stock bajo</span><strong>@Model.Report.LowStockItems</strong><small>Alertas filtradas</small></article>
@@ -75,6 +85,23 @@
                     @if (!Model.DishMetrics.Any())
                     {
                         <p class="muted">Sin datos para graficar.</p>
+                    }
+                </div>
+            </article>
+            <article>
+                <h3>Ventas por dia</h3>
+                <div class="chart-list">
+                    @{
+                        var maxDaily = Model.PeriodReport.DailyTotals.Count == 0 ? 0 : Model.PeriodReport.DailyTotals.Max(item => item.Total);
+                    }
+                    @foreach (var daily in Model.PeriodReport.DailyTotals)
+                    {
+                        var dailyPercent = maxDaily == 0 ? 0 : (int)Math.Round(daily.Total * 100 / maxDaily);
+                        <div class="bar-row">
+                            <span>@daily.BusinessDate</span>
+                            <div class="bar-track"><i class="bar-fill cool" style="width:@dailyPercent%"></i></div>
+                            <strong>Bs @daily.Total.ToString("0")</strong>
+                        </div>
                     }
                 </div>
             </article>

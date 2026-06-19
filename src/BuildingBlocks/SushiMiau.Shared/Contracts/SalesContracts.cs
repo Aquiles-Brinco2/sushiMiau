@@ -19,22 +19,32 @@ public sealed record RestaurantOrder(
     string CustomerName = "",
     string CustomerPhone = "",
     string DeliveryAddress = "",
-    string DeliveryStatus = "");
+    string DeliveryStatus = "",
+    Guid? CustomerId = null,
+    string Notes = "",
+    string DeliveryReference = "",
+    decimal DeliveryFee = 0);
 
 public sealed record CreateOrderRequest(
     string TableOrChannel,
     string ServerName,
     IReadOnlyList<OrderLine> Lines,
     string OrderKind = "Mesa",
+    Guid? CustomerId = null,
     string CustomerName = "",
     string CustomerPhone = "",
-    string DeliveryAddress = "");
+    string DeliveryAddress = "",
+    string Notes = "");
 
 public sealed record CreateDeliveryOrderRequest(
+    Guid CustomerId,
     string CustomerName,
     string CustomerPhone,
     string DeliveryAddress,
+    string DeliveryReference,
+    decimal DeliveryFee,
     string ServerName,
+    string Notes,
     IReadOnlyList<OrderLine> Lines);
 
 public sealed record UpdateDeliveryStatusRequest(string DeliveryStatus);
@@ -47,7 +57,11 @@ public sealed record UpdateOrderRequest(
     string CustomerName = "",
     string CustomerPhone = "",
     string DeliveryAddress = "",
-    string DeliveryStatus = "");
+    string DeliveryStatus = "",
+    Guid? CustomerId = null,
+    string Notes = "",
+    string DeliveryReference = "",
+    decimal DeliveryFee = 0);
 
 public sealed record UpdateOrderStatusRequest(string Status);
 
@@ -103,3 +117,15 @@ public sealed record DishSalesMetric(
     string ItemName,
     int Quantity,
     decimal Total);
+
+public sealed record SalesPeriodReport(
+    string FromDate,
+    string ToDate,
+    int Orders,
+    int PaidOrders,
+    decimal Subtotal,
+    decimal Tax,
+    decimal Total,
+    decimal InvoicedTotal,
+    IReadOnlyList<DishSalesMetric> DishMetrics,
+    IReadOnlyList<DailySalesSummary> DailyTotals);

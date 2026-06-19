@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using SushiMiau.Shared;
 using SushiMiau.Shared.Contracts;
 using SushiMiau.Web.Services;
 
@@ -15,6 +16,10 @@ public sealed class ReservasModel : PageModel
     }
 
     public IReadOnlyList<Reservation> Reservations { get; private set; } = [];
+    public IReadOnlyList<Reservation> PendingReservations { get; private set; } = [];
+    public IReadOnlyList<Reservation> ConfirmedReservations { get; private set; } = [];
+    public IReadOnlyList<Reservation> CompletedReservations { get; private set; } = [];
+    public IReadOnlyList<Reservation> CancelledReservations { get; private set; } = [];
     public IReadOnlyList<Customer> Customers { get; private set; } = [];
     public IReadOnlyList<MenuItem> Menu { get; private set; } = [];
     public IReadOnlyList<RestaurantTable> Tables { get; private set; } = [];
@@ -23,6 +28,10 @@ public sealed class ReservasModel : PageModel
     public string? FilterHour { get; set; }
     public string? FilterCustomer { get; set; }
     public bool CanEditSelectedDate => FilterDate == Today();
+
+    public bool ShowCompletedReservations => string.Equals(FilterStatus, "Completada", StringComparison.OrdinalIgnoreCase);
+    public bool ShowCancelledReservations => string.Equals(FilterStatus, "Cancelada", StringComparison.OrdinalIgnoreCase);
+    public bool ShowActiveReservations => !ShowCompletedReservations && !ShowCancelledReservations;
 
     [BindProperty]
     public ReservationForm Reservation { get; set; } = new();
@@ -58,10 +67,24 @@ public sealed class ReservasModel : PageModel
                 Reservation.TableName = table;
             }
             var reservations = await _client.GetReservationsAsync(FilterDate);
-            Reservations = reservations
+            var filteredReservations = reservations
                 .Where(item => string.IsNullOrWhiteSpace(status) || item.Status.Equals(status, StringComparison.OrdinalIgnoreCase))
                 .Where(item => string.IsNullOrWhiteSpace(hour) || item.ReservationTime.ToLocalTime().ToString("HH:mm").StartsWith(hour))
                 .Where(item => string.IsNullOrWhiteSpace(customer) || item.CustomerName.Contains(customer, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            Reservations = filteredReservations;
+            PendingReservations = filteredReservations
+                .Where(item => item.Status.Equals("Pendiente", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            ConfirmedReservations = filteredReservations
+                .Where(item => item.Status.Equals("Confirmada", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            CompletedReservations = filteredReservations
+                .Where(item => item.Status.Equals("Completada", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            CancelledReservations = filteredReservations
+                .Where(item => item.Status.Equals("Cancelada", StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
         catch (Exception ex)
@@ -75,34 +98,56 @@ public sealed class ReservasModel : PageModel
         await RunAsync(async () =>
         {
             Customers = await _client.GetCustomersAsync();
-            var customer = Customers.FirstOrDefault(item => item.Name.Equals(Reservation.CustomerName, StringComparison.OrdinalIgnoreCase));
+            Tables = await _client.GetTablesAsync();
+            var customer = Customers.FirstOrDefault(item => item.CustomerId == Reservation.CustomerId);
             if (customer is null)
             {
-                customer = await _client.AddCustomerAsync(new CreateCustomerRequest(Reservation.CustomerName, Reservation.CustomerPhone, "0"));
+                throw new InvalidOperationException("Seleccione un cliente registrado.");
             }
 
-            Guid? orderId = null;
-            if (!string.IsNullOrWhiteSpace(OptionalOrder.Item1Name))
+            var table = Tables.FirstOrDefault(item =>
+                item.TableName.Equals(Reservation.TableName, StringComparison.OrdinalIgnoreCase));
+            if (table is null)
+            {
+                throw new InvalidOperationException("Seleccione una mesa registrada.");
+            }
+
+            if (Reservation.PartySize < 1 || Reservation.PartySize > table.Capacity)
+            {
+                throw new InvalidOperationException(
+                    $"{table.TableName} admite como maximo {table.Capacity} personas.");
+            }
+
+            Menu = await _client.GetMenuAsync();
+            var orderLines = CreateLines(OptionalOrder.Lines, Menu);
+            var createdReservation = await _client.AddReservationAsync(new CreateReservationRequest(
+                customer.CustomerId,
+                customer.Name,
+                customer.Phone,
+                Reservation.TableName,
+                Reservation.PartySize,
+                BusinessClock.FromLocal(Reservation.ReservationTime),
+                Reservation.Notes,
+                null));
+
+            if (createdReservation is not null && orderLines.Count > 0)
             {
                 var order = await _client.AddOrderAsync(new CreateOrderRequest(
                     Reservation.TableName,
-                    OptionalOrder.ServerName,
-                    CreateLines(OptionalOrder.Item1Name, OptionalOrder.Item1Quantity, OptionalOrder.Item1Price, OptionalOrder.Item2Name, OptionalOrder.Item2Quantity, OptionalOrder.Item2Price),
+                    User.Identity?.Name ?? "Operador",
+                    orderLines,
                     "Mesa",
-                    Reservation.CustomerName,
-                    Reservation.CustomerPhone));
-                orderId = order?.OrderId;
+                    customer.CustomerId,
+                    customer.Name,
+                    customer.Phone,
+                    "",
+                    "Pedido asociado a reserva"));
+                if (order is not null)
+                {
+                    await _client.UpdateReservationOrderAsync(createdReservation.ReservationId, order.OrderId);
+                }
             }
 
-            await _client.AddReservationAsync(new CreateReservationRequest(
-                customer?.CustomerId ?? Guid.Empty,
-                Reservation.CustomerName,
-                Reservation.CustomerPhone,
-                Reservation.TableName,
-                Reservation.PartySize,
-                new DateTimeOffset(Reservation.ReservationTime),
-                Reservation.Notes,
-                orderId));
             Flash = "Reserva registrada.";
         });
 
@@ -126,7 +171,7 @@ public sealed class ReservasModel : PageModel
         catch (Exception ex) { ErrorMessage = $"Operacion no completada: {ex.Message}"; }
     }
 
-    private static string Today() => DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+    private static string Today() => BusinessClock.Today;
 
     public async Task<IActionResult> OnPostCustomerAsync()
     {
@@ -139,12 +184,17 @@ public sealed class ReservasModel : PageModel
         return RedirectToPage();
     }
 
-    private static List<OrderLine> CreateLines(string item1, int qty1, decimal price1, string item2, int qty2, decimal price2) =>
-        new[] { CreateLine(item1, qty1, price1), CreateLine(item2, qty2, price2) }
+    private static List<OrderLine> CreateLines(IEnumerable<OrderLineForm> lines, IReadOnlyList<MenuItem> menu) =>
+        lines
+            .Where(line => !string.IsNullOrWhiteSpace(line.ItemName) && line.Quantity > 0)
+            .Select(line => CreateLine(line.ItemName, line.Quantity, menu))
             .Where(line => line is not null)
             .Cast<OrderLine>()
             .ToList();
 
-    private static OrderLine? CreateLine(string name, int quantity, decimal price) =>
-        string.IsNullOrWhiteSpace(name) || quantity <= 0 || price <= 0 ? null : new OrderLine(name.Trim(), quantity, price);
+    private static OrderLine? CreateLine(string name, int quantity, IReadOnlyList<MenuItem> menu)
+    {
+        var item = menu.FirstOrDefault(candidate => candidate.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        return item is null || quantity <= 0 ? null : new OrderLine(item.Name, quantity, item.Price, item.ItemId);
+    }
 }

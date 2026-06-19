@@ -15,103 +15,198 @@
     <button type="button" data-dialog-open="#createTableOrder">Nuevo pedido</button>
 </section>
 
+<section class="toolbar">
+    @if (Model.ShowClosedOrders)
+    {
+        <a class="secondary-button" asp-page="/Pedidos">Volver a pedidos activos</a>
+    }
+    else
+    {
+        <a class="secondary-button" asp-page="/Pedidos" asp-route-showClosed="true">Ver pagados y cancelados</a>
+    }
+</section>
+
 <section class="panel wide">
-    <div class="panel-heading"><h2>Pedidos de hoy</h2></div>
+    <div class="panel-heading">
+        <h2>@(Model.ShowClosedOrders ? "Pedidos pagados y cancelados" : "Pedidos de hoy")</h2>
+    </div>
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Mesa</th><th>Operador</th><th>Items</th><th>Pago</th><th>Total</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Mesa</th>
+                    <th>Cliente</th>
+                    <th>Operador</th>
+                    <th>Items</th>
+                    <th>Pago</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
             <tbody>
-            @foreach (var order in Model.TableOrders)
-            {
-                <tr id="order-@order.OrderId">
-                    <td><strong>@order.TableOrChannel</strong></td>
-                    <td>@order.ServerName</td>
-                    <td>@string.Join(", ", order.Lines.Select(line => $"{line.Quantity}x {line.ItemName}"))</td>
-                    <td>@order.PaymentMethod</td>
-                    <td>Bs @order.Total.ToString("0.00")</td>
-                    <td><span class="badge @(order.Status == "Pagado" ? "ok" : "alert-badge")">@order.Status</span></td>
-                    <td class="inline-actions">
-                        <form method="post" asp-page-handler="Status">
-                            <input type="hidden" asp-for="EditOrder.OrderId" value="@order.OrderId" />
-                            <button name="EditOrder.Status" value="Preparando" type="submit">Preparando</button>
-                            <button name="EditOrder.Status" value="En mesa" type="submit">En mesa</button>
-                        </form>
-                        <button type="button" class="secondary-button" data-dialog-open="#edit-order-@order.OrderId">Editar</button>
-                        <form method="post" asp-page-handler="Delete" data-confirm="Esta seguro?">
-                            <input type="hidden" asp-for="Delete.Id" value="@order.OrderId" />
-                            <button type="submit" class="danger-button">Cancelar</button>
-                        </form>
-                        <dialog id="edit-order-@order.OrderId">
-                            <div class="dialog-head"><h2>Editar pedido</h2><button type="button" data-dialog-close>x</button></div>
-                            <form method="post" asp-page-handler="Update" class="dialog-body form-box order-form" data-order-form>
-                                <input type="hidden" asp-for="EditOrder.OrderId" value="@order.OrderId" />
-                                <label>Mesa
-                                    <select name="EditOrder.TableOrChannel" required>
-                                        @foreach (var table in Model.Tables)
-                                        {
-                                            if (table.TableName == order.TableOrChannel)
+                @foreach (var order in Model.ShowClosedOrders ? Model.ClosedTableOrders : Model.ActiveTableOrders)
+                {
+                    <tr id="order-@order.OrderId">
+                        <td><strong>@order.TableOrChannel</strong></td>
+                        <td>@(string.IsNullOrWhiteSpace(order.CustomerName) ? "Sin cliente" : order.CustomerName)</td>
+                        <td>@order.ServerName</td>
+                        <td>@string.Join(", ", order.Lines.Select(line => $"{line.Quantity}x {line.ItemName}"))</td>
+                        <td>@order.PaymentMethod</td>
+                        <td>Bs @order.Total.ToString("0.00")</td>
+                        <td>
+                            <span
+                            class="badge @(order.Status == "Pagado" ? "ok" : order.Status == "Cancelado" ? "alert-badge" : "warning")">@order.Status</span>
+                        </td>
+                        <td class="inline-actions">
+                            @if (!Model.ShowClosedOrders && order.Status.Equals("Pendiente",
+                        StringComparison.OrdinalIgnoreCase))
+                            {
+                                <form method="post" asp-page-handler="Status">
+                                    <input type="hidden" asp-for="EditOrder.OrderId" value="@order.OrderId" />
+                                    <button name="EditOrder.Status" value="En preparacion" type="submit">Preparando</button>
+                                    <button name="EditOrder.Status" value="Listo" type="submit">Listo</button>
+                                    <button name="EditOrder.Status" value="Entregado" type="submit">Entregado</button>
+                                </form>
+                            }
+                            else if (!Model.ShowClosedOrders)
+                            {
+                                <span class="muted">Estado gestionado desde cocina</span>
+                            }
+
+                            @if (order.Status.Equals("Pendiente", StringComparison.OrdinalIgnoreCase) &&
+                            !Model.ShowClosedOrders)
+                            {
+                                <button type="button" class="secondary-button"
+                                        data-dialog-open="#edit-order-@order.OrderId">Editar</button>
+                                <form method="post" asp-page-handler="Delete" data-confirm="Esta seguro?">
+                                    <input type="hidden" asp-for="Delete.Id" value="@order.OrderId" />
+                                    <button type="submit" class="danger-button">Cancelar</button>
+                                </form>
+                            }
+                            else if (!Model.ShowClosedOrders)
+                            {
+                                <span class="muted">No editable</span>
+                            }
+                            <dialog id="edit-order-@order.OrderId">
+                                <div class="dialog-head">
+                                    <h2>Editar pedido</h2><button type="button" data-dialog-close>x</button>
+                                </div>
+                                <form method="post" asp-page-handler="Update" class="dialog-body form-box order-form"
+                                      data-order-form>
+                                    <input type="hidden" asp-for="EditOrder.OrderId" value="@order.OrderId" />
+                                    <label>Mesa
+                                        <select name="EditOrder.TableOrChannel" required>
+                                            @foreach (var table in Model.Tables)
                                             {
-                                                <option value="@table.TableName" selected>@table.TableName (@table.Capacity pers.)</option>
-                                            }
+                                                if (table.TableName == order.TableOrChannel)
+                                                {
+                                                    <option value="@table.TableName" selected>@table.TableName (@table.Capacity
+                                                        pers.)</option>
+                                                    }
                                             else
-                                            {
-                                                <option value="@table.TableName">@table.TableName (@table.Capacity pers.)</option>
-                                            }
+                                                    {
+                                                        <option value="@table.TableName">@table.TableName (@table.Capacity pers.)
+                                                        </option>
+                                                    }
+                                                }
+                                            </select>
+                                        </label>
+                                        <label>Operador <input asp-for="EditOrder.ServerName" value="@order.ServerName"
+                                                                   required /></label>
+                                            <label>Estado <input asp-for="EditOrder.Status" list="tableOrderStatuses"
+                                                                     value="@order.Status" required /></label>
+                                                <label>Observaciones <textarea asp-for="EditOrder.Notes">@order.Notes</textarea></label>
+                                                <div class="order-lines">
+                                                    <div class="line-grid order-line-grid line-grid-head">
+                                                        <span>Producto</span><span>Cant.</span><span>Precio</span><span>Total</span>
+                                                    </div>
+                                                    @foreach (var line in order.Lines)
+                                                    {
+                                                        <div class="line-grid order-line-grid">
+                                                            <span>@line.ItemName</span>
+                                                            <span>@line.Quantity</span>
+                                                            <span>Bs @line.UnitPrice.ToString("0.00")</span>
+                                                            <span>Bs @(line.Quantity * line.UnitPrice).ToString("0.00")</span>
+                                                        </div>
+                                                    }
+                                                </div>
+                                                <div class="order-total-box">
+                                                    <span>Subtotal <strong data-order-subtotal>Bs
+                                                        @order.Subtotal.ToString("0.00")</strong></span>
+                                                        <span>Impuesto <strong data-order-tax>Bs @order.Tax.ToString("0.00")</strong></span>
+                                                        <span>Total <strong data-order-total>Bs
+                                                            @order.Total.ToString("0.00")</strong></span>
+                                                        </div>
+                                                        <button type="submit">Guardar cambios</button>
+                                                    </form>
+                                                </dialog>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <dialog id="createTableOrder">
+                        <div class="dialog-head">
+                            <h2>Pedido de mesa</h2><button type="button" data-dialog-close>x</button>
+                        </div>
+                        <form method="post" asp-page-handler="CreateTable" class="dialog-body form-box order-form" data-order-form>
+                            <label>Mesa
+                                <select asp-for="TableOrder.TableOrChannel" required>
+                                    <option value="">Seleccionar mesa</option>
+                                    @foreach (var table in Model.Tables)
+                                    {
+                                        <option value="@table.TableName">@table.TableName (@table.Capacity pers.)</option>
+                                    }
+                                </select>
+                            </label>
+                            <label>Cliente
+                                <select asp-for="TableOrder.CustomerId">
+                                    <option value="">Sin cliente asociado</option>
+                                    @foreach (var customer in Model.Customers)
+                                    {
+                                        <option value="@customer.CustomerId">@customer.Name -
+                                            @customer.Phone</option>
                                         }
                                     </select>
                                 </label>
-                                <label>Operador <input asp-for="EditOrder.ServerName" value="@order.ServerName" required /></label>
-                                <label>Estado <input asp-for="EditOrder.Status" list="tableOrderStatuses" value="@order.Status" required /></label>
-                                <partial name="_EditableOrderLines" model='(Prefix: "EditOrder", Lines: order.Lines)' />
-                                <div class="order-total-box">
-                                    <span>Subtotal <strong data-order-subtotal>Bs @order.Subtotal.ToString("0.00")</strong></span>
-                                    <span>Impuesto <strong data-order-tax>Bs @order.Tax.ToString("0.00")</strong></span>
-                                    <span>Total <strong data-order-total>Bs @order.Total.ToString("0.00")</strong></span>
+                                <label>Operador <input value="@Model.OperatorName" disabled /></label>
+                                <label>Observaciones <textarea asp-for="TableOrder.Notes" rows="2"></textarea></label>
+                                <partial name="_DynamicOrderLines" model='(Prefix: "TableOrder", Menu: Model.Menu)' />
+                                <div class="payment-grid">
+                                    <label>Metodo de pago <input asp-for="TableOrder.PaymentMethod" list="paymentMethods" /></label>
+                                    <label>Facturar a <input asp-for="TableOrder.BillingName" /></label>
+                                    <label>NIT/CI <input asp-for="TableOrder.TaxId" /></label>
                                 </div>
-                                <button type="submit">Guardar cambios</button>
+                                <div class="order-total-box">
+                                    <span>Subtotal <strong data-order-subtotal>Bs 0.00</strong></span>
+                                    <span>Impuesto <strong data-order-tax>Bs 0.00</strong></span>
+                                    <span>Total <strong data-order-total>Bs 0.00</strong></span>
+                                </div>
+                                <button type="submit">Registrar pedido</button>
                             </form>
                         </dialog>
-                    </td>
-                </tr>
-            }
-            </tbody>
-        </table>
-    </div>
-</section>
 
-<dialog id="createTableOrder">
-    <div class="dialog-head"><h2>Pedido de mesa</h2><button type="button" data-dialog-close>x</button></div>
-    <form method="post" asp-page-handler="CreateTable" class="dialog-body form-box order-form" data-order-form>
-        <label>Mesa
-            <select asp-for="TableOrder.TableOrChannel" required>
-                <option value="">Seleccionar mesa</option>
-                @foreach (var table in Model.Tables)
-                {
-                    <option value="@table.TableName">@table.TableName (@table.Capacity pers.)</option>
-                }
-            </select>
-        </label>
-        <label>Operador <input value="@Model.OperatorName" disabled /></label>
-        <partial name="_DynamicOrderLines" model='(Prefix: "TableOrder", Menu: Model.Menu)' />
-        <div class="payment-grid">
-            <label>Metodo de pago <input asp-for="TableOrder.PaymentMethod" list="paymentMethods" /></label>
-            <label>Facturar a <input asp-for="TableOrder.BillingName" /></label>
-            <label>NIT/CI <input asp-for="TableOrder.TaxId" /></label>
-        </div>
-        <div class="order-total-box">
-            <span>Subtotal <strong data-order-subtotal>Bs 0.00</strong></span>
-            <span>Impuesto <strong data-order-tax>Bs 0.00</strong></span>
-            <span>Total <strong data-order-total>Bs 0.00</strong></span>
-        </div>
-        <button type="submit">Registrar pedido</button>
-    </form>
-</dialog>
-
-<datalist id="menuItems">
-    @foreach (var item in Model.Menu)
-    {
-        <option value="@item.Name"></option>
-    }
-</datalist>
-<datalist id="paymentMethods"><option value="Pendiente"></option><option value="Efectivo"></option><option value="Tarjeta"></option><option value="QR"></option></datalist>
-<datalist id="tableOrderStatuses"><option value="Preparando"></option><option value="En mesa"></option><option value="Pagado"></option></datalist>
+                        <datalist id="menuItems">
+                            @foreach (var item in Model.Menu)
+                            {
+                                <option value="@item.Name" data-price="@item.Price.ToString("0.00")"></option>
+                            }
+                        </datalist>
+                        <datalist id="paymentMethods">
+                            <option value="Pendiente"></option>
+                            <option value="Efectivo"></option>
+                            <option value="Tarjeta"></option>
+                            <option value="Aplicacion de pago"></option>
+                        </datalist>
+                        <datalist id="tableOrderStatuses">
+                            <option value="Pendiente"></option>
+                            <option value="En preparacion"></option>
+                            <option value="Listo"></option>
+                            <option value="Entregado"></option>
+                            <option value="Cancelado"></option>
+                            <option value="Pagado"></option>
+                        </datalist>

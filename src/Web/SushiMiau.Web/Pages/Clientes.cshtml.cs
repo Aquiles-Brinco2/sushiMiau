@@ -15,6 +15,9 @@ public sealed class ClientesModel : PageModel
     }
 
     public IReadOnlyList<Customer> Customers { get; private set; } = [];
+    public Customer? SelectedCustomer { get; private set; }
+    public IReadOnlyList<RestaurantOrder> CustomerOrders { get; private set; } = [];
+    public IReadOnlyList<LoyaltyTransaction> LoyaltyTransactions { get; private set; } = [];
 
     [BindProperty]
     public CustomerForm Customer { get; set; } = new();
@@ -22,17 +25,29 @@ public sealed class ClientesModel : PageModel
     [BindProperty]
     public DeleteForm Delete { get; set; } = new();
 
+    [BindProperty]
+    public LoyaltyForm Loyalty { get; set; } = new();
+
     [TempData]
     public string? Flash { get; set; }
 
     [TempData]
     public string? ErrorMessage { get; set; }
 
-    public async Task OnGetAsync()
+    public async Task OnGetAsync(Guid? customerId)
     {
         try
         {
             Customers = await _client.GetCustomersAsync();
+            if (customerId.HasValue)
+            {
+                SelectedCustomer = Customers.FirstOrDefault(item => item.CustomerId == customerId.Value);
+                if (SelectedCustomer is not null)
+                {
+                    CustomerOrders = await _client.GetOrdersByCustomerAsync(customerId.Value);
+                    LoyaltyTransactions = await _client.GetLoyaltyTransactionsAsync(customerId.Value);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -83,5 +98,23 @@ public sealed class ClientesModel : PageModel
         }
 
         return RedirectToPage();
+    }
+
+    public async Task<IActionResult> OnPostLoyaltyAsync()
+    {
+        try
+        {
+            await _client.AdjustLoyaltyPointsAsync(Loyalty.CustomerId, new AdjustLoyaltyPointsRequest(
+                Loyalty.Points,
+                Loyalty.MovementType,
+                Loyalty.Reason));
+            Flash = "Puntos actualizados.";
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Operacion no completada: {ex.Message}";
+        }
+
+        return RedirectToPage(new { customerId = Loyalty.CustomerId });
     }
 }

@@ -1,4 +1,5 @@
 using SushiMiau.Sales.Api.Data;
+using SushiMiau.Shared;
 using SushiMiau.Shared.Cassandra;
 using SushiMiau.Shared.Contracts;
 
@@ -23,7 +24,10 @@ await repository.InitializeAsync();
 app.MapGet("/health", () => Results.Ok(new { service = "sales", status = "ok" }));
 
 app.MapGet("/api/sales/orders", async (string? businessDate, SalesRepository repo) =>
-    Results.Ok(await repo.GetOrdersAsync(businessDate ?? DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"))));
+    Results.Ok(await repo.GetOrdersAsync(businessDate ?? BusinessClock.Today)));
+
+app.MapGet("/api/sales/orders/customer/{customerId:guid}", async (Guid customerId, SalesRepository repo) =>
+    Results.Ok(await repo.GetOrdersByCustomerAsync(customerId)));
 
 app.MapPost("/api/sales/orders", async (CreateOrderRequest request, SalesRepository repo) =>
 {
@@ -33,8 +37,17 @@ app.MapPost("/api/sales/orders", async (CreateOrderRequest request, SalesReposit
 
 app.MapPut("/api/sales/orders/{orderId:guid}", async (Guid orderId, UpdateOrderRequest request, SalesRepository repo) =>
 {
-    var order = await repo.UpdateOrderAsync(orderId, request);
-    return order is null ? Results.NotFound() : Results.Ok(order);
+    try
+    {
+        var order = await repo.UpdateOrderAsync(orderId, request);
+        return order is null
+            ? Results.NotFound()
+            : Results.Ok(order);
+    }
+    catch (OrderNotEditableException ex)
+    {
+        return Results.Conflict(new { message = ex.Message });
+    }
 });
 
 app.MapPatch("/api/sales/orders/{orderId:guid}/status", async (Guid orderId, UpdateOrderStatusRequest request, SalesRepository repo) =>
@@ -51,7 +64,7 @@ app.MapDelete("/api/sales/orders/{orderId:guid}", async (Guid orderId, SalesRepo
 
 app.MapGet("/api/sales/delivery-orders", async (string? businessDate, SalesRepository repo) =>
 {
-    var orders = await repo.GetOrdersAsync(businessDate ?? DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"));
+    var orders = await repo.GetOrdersAsync(businessDate ?? BusinessClock.Today);
     return Results.Ok(orders.Where(order => order.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase)));
 });
 
@@ -74,15 +87,21 @@ app.MapPatch("/api/sales/orders/{orderId:guid}/pay", async (Guid orderId, Regist
 });
 
 app.MapGet("/api/sales/payments", async (string? businessDate, SalesRepository repo) =>
-    Results.Ok(await repo.GetPaymentsAsync(businessDate ?? DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"))));
+    Results.Ok(await repo.GetPaymentsAsync(businessDate ?? BusinessClock.Today)));
 
 app.MapGet("/api/sales/invoices", async (string? businessDate, SalesRepository repo) =>
-    Results.Ok(await repo.GetInvoicesAsync(businessDate ?? DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"))));
+    Results.Ok(await repo.GetInvoicesAsync(businessDate ?? BusinessClock.Today)));
 
 app.MapGet("/api/sales/summary", async (string? businessDate, SalesRepository repo) =>
-    Results.Ok(await repo.GetSummaryAsync(businessDate ?? DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"))));
+    Results.Ok(await repo.GetSummaryAsync(businessDate ?? BusinessClock.Today)));
 
 app.MapGet("/api/sales/dish-metrics", async (string? businessDate, SalesRepository repo) =>
-    Results.Ok(await repo.GetDishSalesMetricsAsync(businessDate ?? DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"))));
+    Results.Ok(await repo.GetDishSalesMetricsAsync(businessDate ?? BusinessClock.Today)));
+
+app.MapGet("/api/sales/reports/period", async (string? fromDate, string? toDate, SalesRepository repo) =>
+{
+    var today = BusinessClock.Today;
+    return Results.Ok(await repo.GetPeriodReportAsync(fromDate ?? today, toDate ?? today));
+});
 
 app.Run();

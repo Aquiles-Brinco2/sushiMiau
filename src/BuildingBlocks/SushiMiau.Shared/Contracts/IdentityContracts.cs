@@ -8,6 +8,8 @@ public static class AppRoles
     public const string Kitchen = "Cocina";
     public const string Cashier = "Caja";
     public const string Inventory = "Inventario";
+    public const string Waiter = "Mozo";
+    public const string Delivery = "Repartidor";
 }
 
 public sealed record AppUser(

@@ -1,0 +1,89 @@
+@page
+@model PersonalModel
+@{
+    ViewData["Title"] = "Personal";
+}
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Operacion</p>
+        <h1>Personal y turnos</h1>
+        <p class="muted">Roles, horarios y asignaciones diarias del restaurante.</p>
+    </div>
+    <button type="button" data-dialog-open="#createShift">Nuevo turno</button>
+</section>
+
+<section class="panel">
+    <form method="get" class="toolbar">
+        <label>Fecha <input type="date" name="date" value="@Model.FilterDate" /></label>
+        <button type="submit">Consultar</button>
+    </form>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Empleado</th><th>Rol</th><th>Turno</th><th>Horario</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody>
+            @foreach (var shift in Model.Shifts)
+            {
+                <tr>
+                    <td><strong>@shift.EmployeeName</strong></td>
+                    <td>@shift.Role</td>
+                    <td>@shift.ShiftName</td>
+                    <td>@shift.StartsAt.ToLocalTime().ToString("HH:mm") - @shift.EndsAt.ToLocalTime().ToString("HH:mm")</td>
+                    <td><span class="badge">@shift.Status</span></td>
+                    <td class="inline-actions">
+                        <button type="button" class="secondary-button" data-dialog-open="#edit-shift-@shift.ShiftId">Editar</button>
+                        <form method="post" asp-page-handler="Delete" data-confirm="Esta seguro?">
+                            <input type="hidden" asp-for="Shift.ShiftId" value="@shift.ShiftId" />
+                            <button type="submit" class="danger-button">Eliminar</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<dialog id="createShift">
+    <div class="dialog-head"><h2>Nuevo turno</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="Create" class="dialog-body form-box">
+        <label>Empleado
+            <select asp-for="Shift.EmployeeId" required>
+                <option value="">Seleccionar</option>
+                @foreach (var employee in Model.Employees) { <option value="@employee.UserId">@employee.FullName - @employee.Role</option> }
+            </select>
+        </label>
+        <label>Nombre del turno <input asp-for="Shift.ShiftName" required /></label>
+        <label>Inicio <input asp-for="Shift.StartsAt" type="datetime-local" required /></label>
+        <label>Fin <input asp-for="Shift.EndsAt" type="datetime-local" required /></label>
+        <label>Estado <select asp-for="Shift.Status"><option>Programado</option><option>Activo</option><option>Finalizado</option><option>Ausente</option></select></label>
+        <button type="submit">Guardar turno</button>
+    </form>
+</dialog>
+
+@foreach (var shift in Model.Shifts)
+{
+    <dialog id="edit-shift-@shift.ShiftId">
+        <div class="dialog-head"><h2>Editar turno</h2><button type="button" data-dialog-close>x</button></div>
+        <form method="post" asp-page-handler="Update" class="dialog-body form-box">
+            <input type="hidden" asp-for="Shift.ShiftId" value="@shift.ShiftId" />
+            <label>Empleado
+                <select name="Shift.EmployeeId" required>
+                    @foreach (var employee in Model.Employees)
+                    {
+                        <option value="@employee.UserId" selected="@(employee.UserId == shift.EmployeeId)">@employee.FullName - @employee.Role</option>
+                    }
+                </select>
+            </label>
+            <label>Turno <input asp-for="Shift.ShiftName" value="@shift.ShiftName" required /></label>
+            <label>Inicio <input name="Shift.StartsAt" type="datetime-local" value="@shift.StartsAt.ToLocalTime().ToString("yyyy-MM-ddTHH:mm")" required /></label>
+            <label>Fin <input name="Shift.EndsAt" type="datetime-local" value="@shift.EndsAt.ToLocalTime().ToString("yyyy-MM-ddTHH:mm")" required /></label>
+            <label>Estado <input asp-for="Shift.Status" value="@shift.Status" list="shiftStatuses" required /></label>
+            <button type="submit">Guardar cambios</button>
+        </form>
+    </dialog>
+}
+
+<datalist id="shiftStatuses"><option value="Programado"></option><option value="Activo"></option><option value="Finalizado"></option><option value="Ausente"></option></datalist>

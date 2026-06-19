@@ -113,6 +113,34 @@ textarea {
   flex-direction: column;
   gap: 4px;
   margin-top: 12px;
+  overflow-y: auto;
+}
+
+.kitchen-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.kitchen-board .ticket {
+  padding: 18px;
+  border-radius: 8px;
+}
+
+.kitchen-board .ticket header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 4px 12px;
+}
+
+.kitchen-board .ticket header .badge {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.kitchen-board .ticket ul {
+  padding-left: 20px;
 }
 
 .topbar nav a,
@@ -563,6 +591,12 @@ h3 {
   cursor: pointer;
 }
 
+.secondary-button.active {
+  background: var(--teal-dark);
+  color: white;
+  border-color: var(--teal-dark);
+}
+
 .danger-button {
   background: var(--coral);
 }
@@ -895,6 +929,19 @@ button.danger-button:hover {
   gap: 8px;
 }
 
+.optional-line-grid {
+  grid-template-columns: minmax(180px, 1fr) 86px 120px 84px;
+}
+
+.order-line-grid {
+  grid-template-columns: minmax(150px, 1fr) 86px 100px 100px 70px;
+}
+
+.line-remove-button {
+  min-height: 40px;
+  padding: 8px;
+}
+
 .line-grid-head {
   color: var(--muted);
   font-size: 12px;
@@ -965,6 +1012,8 @@ button.danger-button:hover {
     position: static;
     width: auto;
     margin: 0;
+    gap: 8px;
+    padding: 12px;
   }
 
   .shell {
@@ -981,7 +1030,26 @@ button.danger-button:hover {
 
   .topbar nav,
   .sidebar nav {
+    display: grid;
+    max-height: 156px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     justify-content: flex-start;
+    margin-top: 0;
+    overflow-y: auto;
+  }
+
+  .topbar nav a,
+  .sidebar nav a {
+    padding: 7px 10px;
+  }
+
+  .logout-form {
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .logout-form button {
+    min-width: 90px;
   }
 
   .metric-grid,

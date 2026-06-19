@@ -31,6 +31,7 @@ public sealed record KitchenTicket(
     string BusinessDate,
     string Station,
     string TableOrChannel,
+    Guid? OrderId,
     string Status,
     IReadOnlyList<string> Items,
     string Notes,
@@ -40,6 +41,7 @@ public sealed record KitchenTicket(
 public sealed record CreateKitchenTicketRequest(
     string Station,
     string TableOrChannel,
+    Guid? OrderId,
     IReadOnlyList<string> Items,
     string Notes);
 
@@ -48,6 +50,7 @@ public sealed record UpdateTicketStatusRequest(string Status);
 public sealed record StaffShift(
     Guid ShiftId,
     string BusinessDate,
+    Guid EmployeeId,
     string EmployeeName,
     string Role,
     string ShiftName,
@@ -56,6 +59,7 @@ public sealed record StaffShift(
     DateTimeOffset EndsAt);
 
 public sealed record CreateStaffShiftRequest(
+    Guid EmployeeId,
     string EmployeeName,
     string Role,
     string ShiftName,
@@ -96,16 +100,36 @@ public sealed record CreateReservationRequest(
 
 public sealed record UpdateReservationStatusRequest(string Status);
 
+public sealed record UpdateReservationOrderRequest(Guid? OrderId);
+
 public sealed record RestaurantTable(
     string TableName,
     int Capacity,
     string Status,
+    Guid? AssignedEmployeeId,
     string AssignedEmployee,
     DateTimeOffset UpdatedAt);
 
 public sealed record UpdateTableStateRequest(
     string Status,
+    Guid? AssignedEmployeeId = null,
     string AssignedEmployee = "");
+
+public sealed record UpsertRestaurantTableRequest(
+    string TableName,
+    int Capacity,
+    string Status,
+    Guid? AssignedEmployeeId,
+    string AssignedEmployee);
+
+public sealed record UpdateStaffShiftRequest(
+    Guid EmployeeId,
+    string EmployeeName,
+    string Role,
+    string ShiftName,
+    string Status,
+    DateTimeOffset StartsAt,
+    DateTimeOffset EndsAt);
 
 public sealed record NotificationMessage(
     Guid NotificationId,
@@ -128,7 +152,8 @@ public sealed record Customer(
     string Phone,
     string Nit,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int LoyaltyPoints = 0);
 
 public sealed record CreateCustomerRequest(
     string Name,
@@ -139,3 +164,18 @@ public sealed record UpdateCustomerRequest(
     string Name,
     string Phone,
     string Nit);
+
+public sealed record LoyaltyTransaction(
+    Guid TransactionId,
+    Guid CustomerId,
+    int Points,
+    string MovementType,
+    string Reason,
+    Guid? OrderId,
+    DateTimeOffset CreatedAt);
+
+public sealed record AdjustLoyaltyPointsRequest(
+    int Points,
+    string MovementType,
+    string Reason,
+    Guid? OrderId = null);

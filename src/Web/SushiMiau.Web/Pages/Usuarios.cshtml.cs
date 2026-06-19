@@ -17,7 +17,8 @@ public sealed class UsuariosModel : PageModel
     }
 
     public IReadOnlyList<AppUser> Users { get; private set; } = [];
-    public IReadOnlyList<string> Roles { get; } = [AppRoles.Admin, AppRoles.Owner, AppRoles.Manager, AppRoles.Kitchen, AppRoles.Cashier, AppRoles.Inventory];
+    public IReadOnlyList<string> Roles { get; } =
+        [AppRoles.Admin, AppRoles.Owner, AppRoles.Manager, AppRoles.Kitchen, AppRoles.Cashier, AppRoles.Inventory, AppRoles.Waiter, AppRoles.Delivery];
 
     [BindProperty]
     public UserForm UserForm { get; set; } = new();

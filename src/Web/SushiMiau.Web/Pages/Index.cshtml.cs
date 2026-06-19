@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using SushiMiau.Shared;
 using SushiMiau.Shared.Contracts;
 using SushiMiau.Web.Services;
 
@@ -110,6 +111,7 @@ public class IndexModel : PageModel
             await _client.AddTicketAsync(new CreateKitchenTicketRequest(
                 Ticket.Station,
                 Ticket.TableOrChannel,
+                null,
                 SplitLines(Ticket.ItemsText),
                 Ticket.Notes));
             Flash = "Comanda enviada a cocina.";
@@ -163,12 +165,13 @@ public class IndexModel : PageModel
         await ExecuteAndRedirectAsync(async () =>
         {
             await _client.AddShiftAsync(new CreateStaffShiftRequest(
+                Guid.Empty,
                 Shift.EmployeeName,
                 Shift.Role,
                 Shift.ShiftName,
                 Shift.Status,
-                new DateTimeOffset(Shift.StartsAt),
-                new DateTimeOffset(Shift.EndsAt)));
+                BusinessClock.FromLocal(Shift.StartsAt),
+                BusinessClock.FromLocal(Shift.EndsAt)));
             Flash = "Turno agregado.";
         });
 
@@ -195,7 +198,9 @@ public class IndexModel : PageModel
                 }
             }
 
-            await _client.UpdateTableStateAsync(TableState.TableName, new UpdateTableStateRequest(TableState.Status, employee));
+            await _client.UpdateTableStateAsync(
+                TableState.TableName,
+                new UpdateTableStateRequest(TableState.Status, null, employee));
             Flash = $"Mesa {TableState.TableName} actualizada.";
         });
 
@@ -233,49 +238,53 @@ public class IndexModel : PageModel
 
         return tables.Select(table =>
         {
-            var order = activeOrders.FirstOrDefault(item => item.TableOrChannel.Equals(table.TableName, StringComparison.OrdinalIgnoreCase));
+            var ordersForTable = activeOrders
+                .Where(item => item.TableOrChannel.Equals(table.TableName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
             var reservation = activeReservations.FirstOrDefault(item => item.TableName.Equals(table.TableName, StringComparison.OrdinalIgnoreCase));
             var status = table.Status;
             if (status.Equals("Fuera de servicio", StringComparison.OrdinalIgnoreCase))
             {
-                return CreateTablePanelItem(table, "Fuera de servicio", order, reservation);
+                return CreateTablePanelItem(table, "Fuera de servicio", ordersForTable, reservation);
             }
 
-            if (order is not null)
+            if (ordersForTable.Any())
             {
-                return CreateTablePanelItem(table, "Ocupada", order, reservation);
+                return CreateTablePanelItem(table, "Ocupada", ordersForTable, reservation);
             }
 
             if (reservation is not null)
             {
-                return CreateTablePanelItem(table, "Reservada", order, reservation);
+                return CreateTablePanelItem(table, "Reservada", ordersForTable, reservation);
             }
 
             if (status.Equals("Ocupada", StringComparison.OrdinalIgnoreCase))
             {
-                return CreateTablePanelItem(table, "Ocupada", order, reservation);
+                return CreateTablePanelItem(table, "Ocupada", ordersForTable, reservation);
             }
 
-            return CreateTablePanelItem(table, "Disponible", order, reservation);
+            return CreateTablePanelItem(table, "Disponible", ordersForTable, reservation);
         }).ToList();
     }
 
-    private static TablePanelItem CreateTablePanelItem(RestaurantTable table, string status, RestaurantOrder? order, Reservation? reservation)
+    private static TablePanelItem CreateTablePanelItem(RestaurantTable table, string status, IReadOnlyList<RestaurantOrder> orders, Reservation? reservation)
     {
         var reserveStart = reservation?.ReservationTime.ToLocalTime();
+        var firstOrder = orders.FirstOrDefault();
         return new TablePanelItem(
             table.TableName,
             table.Capacity,
             status,
-            string.IsNullOrWhiteSpace(table.AssignedEmployee) ? order?.ServerName ?? "Sin asignar" : table.AssignedEmployee,
-            order?.OrderId,
-            order?.Status ?? string.Empty,
-            order?.Total ?? 0,
+            string.IsNullOrWhiteSpace(table.AssignedEmployee) ? firstOrder?.ServerName ?? "Sin asignar" : table.AssignedEmployee,
+            firstOrder?.OrderId,
+            firstOrder?.Status ?? string.Empty,
+            firstOrder?.Total ?? 0,
             reservation?.ReservationId,
             reservation?.CustomerName ?? string.Empty,
             reservation?.PartySize,
             reserveStart,
-            reserveStart?.AddHours(2));
+            reserveStart?.AddHours(2),
+            orders);
     }
 
     private async Task ExecuteAndRedirectAsync(Func<Task> action)
@@ -306,7 +315,7 @@ public class IndexModel : PageModel
 
     private static RestaurantDashboard EmptyDashboard()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+        var today = BusinessClock.Today;
 
         return new RestaurantDashboard(
             new InventorySnapshot(0, 0, 0, []),
@@ -371,6 +380,8 @@ public sealed class OrderForm
     public string PaymentMethod { get; set; } = "Pendiente";
     public string BillingName { get; set; } = "Consumidor Final";
     public string TaxId { get; set; } = "0";
+    public Guid CustomerId { get; set; }
+    public string Notes { get; set; } = string.Empty;
     public List<OrderLineForm> Lines { get; set; } = [new()];
     public string Item1Name { get; set; } = string.Empty;
     public int Item1Quantity { get; set; } = 1;
@@ -402,11 +413,15 @@ public sealed class OrderEditForm
     public Guid OrderId { get; set; }
     public string TableOrChannel { get; set; } = string.Empty;
     public string ServerName { get; set; } = string.Empty;
-    public string Status { get; set; } = "Preparando";
-    public string DeliveryStatus { get; set; } = "Preparando";
+    public string Status { get; set; } = "Pendiente";
+    public string DeliveryStatus { get; set; } = "Pendiente";
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
     public string DeliveryAddress { get; set; } = string.Empty;
+    public Guid? CustomerId { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public string DeliveryReference { get; set; } = string.Empty;
+    public decimal DeliveryFee { get; set; }
     public string Item1Name { get; set; } = string.Empty;
     public int Item1Quantity { get; set; } = 1;
     public decimal Item1Price { get; set; }
@@ -426,6 +441,8 @@ public sealed class OrderEditForm
 
 public sealed class ShiftForm
 {
+    public Guid ShiftId { get; set; }
+    public Guid EmployeeId { get; set; }
     public string EmployeeName { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public string ShiftName { get; set; } = "Cena";
@@ -437,6 +454,7 @@ public sealed class ShiftForm
 public sealed class TicketStatusForm
 {
     public Guid TicketId { get; set; }
+    public Guid? OrderId { get; set; }
     public string Status { get; set; } = "En preparacion";
 }
 
@@ -463,6 +481,9 @@ public sealed class DeliveryOrderForm
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
     public string DeliveryAddress { get; set; } = string.Empty;
+    public string DeliveryReference { get; set; } = string.Empty;
+    public decimal DeliveryFee { get; set; }
+    public string Notes { get; set; } = string.Empty;
     public string ServerName { get; set; } = string.Empty;
     public string PaymentMethod { get; set; } = "Pendiente";
     public string BillingName { get; set; } = "Consumidor Final";
@@ -551,6 +572,49 @@ public sealed class TableStateForm
     public Guid? ReservationId { get; set; }
 }
 
+public sealed class RestaurantTableForm
+{
+    public string CurrentName { get; set; } = string.Empty;
+    public string TableName { get; set; } = string.Empty;
+    public int Capacity { get; set; } = 4;
+    public string Status { get; set; } = "Disponible";
+    public Guid? AssignedEmployeeId { get; set; }
+    public string AssignedEmployee { get; set; } = string.Empty;
+}
+
+public sealed class SupplierForm
+{
+    public Guid SupplierId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string ContactName { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Address { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class PurchaseOrderForm
+{
+    public Guid SupplierId { get; set; }
+    public string Notes { get; set; } = string.Empty;
+    public List<PurchaseOrderLineForm> Lines { get; set; } = [new()];
+}
+
+public sealed class PurchaseOrderLineForm
+{
+    public Guid InventoryItemId { get; set; }
+    public decimal Quantity { get; set; } = 1;
+    public decimal UnitPrice { get; set; }
+}
+
+public sealed class LoyaltyForm
+{
+    public Guid CustomerId { get; set; }
+    public int Points { get; set; }
+    public string MovementType { get; set; } = "Canje";
+    public string Reason { get; set; } = string.Empty;
+}
+
 public sealed record TablePanelItem(
     string TableName,
     int Capacity,
@@ -563,4 +627,5 @@ public sealed record TablePanelItem(
     string ReservationCustomer,
     int? ReservationPartySize,
     DateTimeOffset? ReservationStartsAt,
-    DateTimeOffset? ReservationEndsAt);
+    DateTimeOffset? ReservationEndsAt,
+    IReadOnlyList<RestaurantOrder> PendingOrders);

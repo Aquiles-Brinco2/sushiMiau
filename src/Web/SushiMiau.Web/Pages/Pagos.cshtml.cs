@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using SushiMiau.Shared;
 using SushiMiau.Shared.Contracts;
 using SushiMiau.Web.Services;
 
@@ -18,6 +19,7 @@ public sealed class PagosModel : PageModel
     public IReadOnlyList<PaymentRecord> Payments { get; private set; } = [];
     public IReadOnlyList<Invoice> Invoices { get; private set; } = [];
     public DailySalesSummary Summary { get; private set; } = new(Today(), 0, 0, 0, 0, 0);
+    public bool ShowHistory { get; private set; }
 
     [BindProperty]
     public PaymentForm Payment { get; set; } = new();
@@ -28,13 +30,15 @@ public sealed class PagosModel : PageModel
     [TempData]
     public string? ErrorMessage { get; set; }
 
-    public async Task OnGetAsync()
+    public async Task OnGetAsync(bool showHistory = false)
     {
+        ShowHistory = showHistory;
         try
         {
             var today = Today();
             var orders = await _client.GetOrdersAsync(today);
-            OpenOrders = orders.Where(order => order.Status != "Pagado").ToList();
+            OpenOrders = orders.Where(order => !order.Status.Equals("Pagado", StringComparison.OrdinalIgnoreCase)
+                    && !order.Status.Equals("Cancelado", StringComparison.OrdinalIgnoreCase)).ToList();
             Payments = await _client.GetPaymentsAsync(today);
             Invoices = await _client.GetInvoicesAsync(today);
             Summary = await _client.GetSalesSummaryAsync(today);
@@ -60,5 +64,5 @@ public sealed class PagosModel : PageModel
         return RedirectToPage();
     }
 
-    private static string Today() => DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+    private static string Today() => BusinessClock.Today;
 }

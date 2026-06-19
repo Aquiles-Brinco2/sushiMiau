@@ -1,0 +1,90 @@
+@page
+@model MesasModel
+@{
+    ViewData["Title"] = "Mesas";
+}
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Salon</p>
+        <h1>Administracion de mesas</h1>
+        <p class="muted">Numero, capacidad, estado operativo y mozo asignado.</p>
+    </div>
+    <button type="button" data-dialog-open="#createTable">Nueva mesa</button>
+</section>
+
+<section class="panel wide">
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Mesa</th><th>Capacidad</th><th>Estado</th><th>Empleado</th><th>Acciones</th></tr></thead>
+            <tbody>
+            @foreach (var table in Model.Tables)
+            {
+                <tr>
+                    <td><strong>@table.TableName</strong></td>
+                    <td>@table.Capacity personas</td>
+                    <td><span class="badge">@table.Status</span></td>
+                    <td>@(string.IsNullOrWhiteSpace(table.AssignedEmployee) ? "Sin asignar" : table.AssignedEmployee)</td>
+                    <td class="inline-actions">
+                        <button type="button" class="secondary-button" data-dialog-open="#edit-table-@table.TableName.Replace(" ", "-")">Editar</button>
+                        <form method="post" asp-page-handler="Delete" data-confirm="Esta seguro?">
+                            <input type="hidden" asp-for="Table.CurrentName" value="@table.TableName" />
+                            <button type="submit" class="danger-button">Eliminar</button>
+                        </form>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<dialog id="createTable">
+    <div class="dialog-head"><h2>Nueva mesa</h2><button type="button" data-dialog-close>x</button></div>
+    <form method="post" asp-page-handler="Create" class="dialog-body form-box">
+        <label>Nombre o numero <input asp-for="Table.TableName" required /></label>
+        <label>Capacidad <input asp-for="Table.Capacity" type="number" min="1" required /></label>
+        <label>Estado
+            <select asp-for="Table.Status"><option>Disponible</option><option>Reservada</option><option>Ocupada</option><option>Fuera de servicio</option></select>
+        </label>
+        <label>Empleado
+            <select asp-for="Table.AssignedEmployeeId">
+                <option value="">Sin asignar</option>
+                @foreach (var employee in Model.Employees) { <option value="@employee.UserId">@employee.FullName - @employee.Role</option> }
+            </select>
+        </label>
+        <button type="submit">Guardar mesa</button>
+    </form>
+</dialog>
+
+@foreach (var table in Model.Tables)
+{
+    <dialog id="edit-table-@table.TableName.Replace(" ", "-")">
+        <div class="dialog-head"><h2>Editar @table.TableName</h2><button type="button" data-dialog-close>x</button></div>
+        <form method="post" asp-page-handler="Update" class="dialog-body form-box">
+            <input type="hidden" asp-for="Table.CurrentName" value="@table.TableName" />
+            <label>Nombre <input asp-for="Table.TableName" value="@table.TableName" required /></label>
+            <label>Capacidad <input asp-for="Table.Capacity" type="number" min="1" value="@table.Capacity" required /></label>
+            <label>Estado
+                <select name="Table.Status">
+                    @foreach (var status in new[] { "Disponible", "Reservada", "Ocupada", "Fuera de servicio" })
+                    {
+                        <option value="@status" selected="@(status == table.Status)">@status</option>
+                    }
+                </select>
+            </label>
+            <label>Empleado
+                <select name="Table.AssignedEmployeeId">
+                    <option value="">Sin asignar</option>
+                    @foreach (var employee in Model.Employees)
+                    {
+                        <option value="@employee.UserId" selected="@(employee.UserId == table.AssignedEmployeeId)">@employee.FullName - @employee.Role</option>
+                    }
+                </select>
+            </label>
+            <button type="submit">Guardar cambios</button>
+        </form>
+    </dialog>
+}

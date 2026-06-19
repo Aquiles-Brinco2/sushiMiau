@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Cassandra;
+using SushiMiau.Shared;
 using SushiMiau.Shared.Contracts;
 using CassandraSession = Cassandra.ISession;
 
@@ -26,10 +27,14 @@ public sealed class SalesRepository
                 order_id uuid,
                 order_kind text,
                 table_or_channel text,
+                customer_id uuid,
                 customer_name text,
                 customer_phone text,
                 delivery_address text,
+                delivery_reference text,
+                delivery_fee decimal,
                 delivery_status text,
+                notes text,
                 server_name text,
                 status text,
                 payment_method text,
@@ -43,9 +48,13 @@ public sealed class SalesRepository
             """));
         await TryExecuteAsync("ALTER TABLE orders_by_day ADD order_kind text");
         await TryExecuteAsync("ALTER TABLE orders_by_day ADD customer_name text");
+        await TryExecuteAsync("ALTER TABLE orders_by_day ADD customer_id uuid");
         await TryExecuteAsync("ALTER TABLE orders_by_day ADD customer_phone text");
         await TryExecuteAsync("ALTER TABLE orders_by_day ADD delivery_address text");
+        await TryExecuteAsync("ALTER TABLE orders_by_day ADD delivery_reference text");
+        await TryExecuteAsync("ALTER TABLE orders_by_day ADD delivery_fee decimal");
         await TryExecuteAsync("ALTER TABLE orders_by_day ADD delivery_status text");
+        await TryExecuteAsync("ALTER TABLE orders_by_day ADD notes text");
 
         await _session.ExecuteAsync(new SimpleStatement("""
             CREATE TABLE IF NOT EXISTS orders_by_id (
@@ -55,10 +64,14 @@ public sealed class SalesRepository
                 created_at timestamp,
                 order_kind text,
                 table_or_channel text,
+                customer_id uuid,
                 customer_name text,
                 customer_phone text,
                 delivery_address text,
+                delivery_reference text,
+                delivery_fee decimal,
                 delivery_status text,
+                notes text,
                 server_name text,
                 status text,
                 payment_method text,
@@ -72,9 +85,41 @@ public sealed class SalesRepository
             """));
         await TryExecuteAsync("ALTER TABLE orders_by_id ADD order_kind text");
         await TryExecuteAsync("ALTER TABLE orders_by_id ADD customer_name text");
+        await TryExecuteAsync("ALTER TABLE orders_by_id ADD customer_id uuid");
         await TryExecuteAsync("ALTER TABLE orders_by_id ADD customer_phone text");
         await TryExecuteAsync("ALTER TABLE orders_by_id ADD delivery_address text");
+        await TryExecuteAsync("ALTER TABLE orders_by_id ADD delivery_reference text");
+        await TryExecuteAsync("ALTER TABLE orders_by_id ADD delivery_fee decimal");
         await TryExecuteAsync("ALTER TABLE orders_by_id ADD delivery_status text");
+        await TryExecuteAsync("ALTER TABLE orders_by_id ADD notes text");
+
+        await _session.ExecuteAsync(new SimpleStatement("""
+            CREATE TABLE IF NOT EXISTS orders_by_customer (
+                restaurant_id text,
+                customer_id uuid,
+                created_at timestamp,
+                order_id uuid,
+                business_date text,
+                order_kind text,
+                table_or_channel text,
+                customer_name text,
+                customer_phone text,
+                delivery_address text,
+                delivery_reference text,
+                delivery_fee decimal,
+                delivery_status text,
+                server_name text,
+                status text,
+                payment_method text,
+                notes text,
+                lines_json text,
+                subtotal decimal,
+                tax decimal,
+                total decimal,
+                updated_at timestamp,
+                PRIMARY KEY ((restaurant_id, customer_id), created_at, order_id)
+            ) WITH CLUSTERING ORDER BY (created_at DESC)
+            """));
 
         await _session.ExecuteAsync(new SimpleStatement("""
             CREATE TABLE IF NOT EXISTS payments_by_day (
@@ -108,7 +153,7 @@ public sealed class SalesRepository
             ) WITH CLUSTERING ORDER BY (issued_at DESC)
             """));
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+        var today = BusinessClock.Today;
         if ((await GetOrdersAsync(today)).Count == 0)
         {
             var order = await CreateOrderAsync(new CreateOrderRequest(
@@ -123,10 +168,14 @@ public sealed class SalesRepository
             await RegisterPaymentAsync(order.OrderId, new RegisterPaymentRequest("Tarjeta", "Sushi Miau Demo", "1234567"));
 
             await CreateDeliveryOrderAsync(new CreateDeliveryOrderRequest(
+                Guid.Empty,
                 "Rafael Quiroga",
                 "71234567",
                 "Av. America #420",
+                "Porton negro",
+                10m,
                 "Lucia",
+                "",
                 [
                     new OrderLine("Combo itamae", 1, 118m),
                     new OrderLine("Mochi matcha", 2, 24m)
@@ -137,8 +186,8 @@ public sealed class SalesRepository
     public async Task<IReadOnlyList<RestaurantOrder>> GetOrdersAsync(string businessDate)
     {
         var rows = await _session.ExecuteAsync(new SimpleStatement("""
-            SELECT order_id, business_date, order_kind, table_or_channel, customer_name, customer_phone,
-                   delivery_address, delivery_status, server_name, status, payment_method, lines_json,
+            SELECT order_id, business_date, order_kind, table_or_channel, customer_id, customer_name, customer_phone,
+                   delivery_address, delivery_reference, delivery_fee, delivery_status, server_name, status, payment_method, notes, lines_json,
                    subtotal, tax, total, created_at, updated_at
             FROM orders_by_day
             WHERE restaurant_id = ? AND business_date = ?
@@ -152,8 +201,8 @@ public sealed class SalesRepository
     public async Task<RestaurantOrder?> GetOrderAsync(Guid orderId)
     {
         var rows = await _session.ExecuteAsync(new SimpleStatement("""
-            SELECT order_id, business_date, order_kind, table_or_channel, customer_name, customer_phone,
-                   delivery_address, delivery_status, server_name, status, payment_method, lines_json,
+            SELECT order_id, business_date, order_kind, table_or_channel, customer_id, customer_name, customer_phone,
+                   delivery_address, delivery_reference, delivery_fee, delivery_status, server_name, status, payment_method, notes, lines_json,
                    subtotal, tax, total, created_at, updated_at
             FROM orders_by_id
             WHERE restaurant_id = ? AND order_id = ?
@@ -178,10 +227,10 @@ public sealed class SalesRepository
 
         var order = new RestaurantOrder(
             Guid.NewGuid(),
-            DateOnly.FromDateTime(now.UtcDateTime).ToString("yyyy-MM-dd"),
+            BusinessClock.DateKey(now),
             request.TableOrChannel.Trim(),
             request.ServerName.Trim(),
-            "Preparando",
+            "Pendiente",
             "Pendiente",
             lines,
             subtotal,
@@ -193,22 +242,34 @@ public sealed class SalesRepository
             request.CustomerName.Trim(),
             request.CustomerPhone.Trim(),
             request.DeliveryAddress.Trim(),
-            request.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase) ? "Preparando" : "");
+            request.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase) ? "Pendiente" : "",
+            request.CustomerId,
+            request.Notes.Trim());
 
         await SaveOrderAsync(order);
         return order;
     }
 
-    public Task<RestaurantOrder> CreateDeliveryOrderAsync(CreateDeliveryOrderRequest request)
+    public async Task<RestaurantOrder> CreateDeliveryOrderAsync(CreateDeliveryOrderRequest request)
     {
-        return CreateOrderAsync(new CreateOrderRequest(
+        var order = await CreateOrderAsync(new CreateOrderRequest(
             "Delivery",
             request.ServerName,
             request.Lines,
             "Delivery",
+            request.CustomerId,
             request.CustomerName,
             request.CustomerPhone,
-            request.DeliveryAddress));
+            request.DeliveryAddress,
+            request.Notes));
+        var updated = order with
+        {
+            DeliveryReference = request.DeliveryReference.Trim(),
+            DeliveryFee = Math.Max(0, request.DeliveryFee),
+            Total = order.Total + Math.Max(0, request.DeliveryFee)
+        };
+        await SaveOrderAsync(updated);
+        return updated;
     }
 
     public async Task<RestaurantOrder?> UpdateDeliveryStatusAsync(Guid orderId, string deliveryStatus)
@@ -255,13 +316,21 @@ public sealed class SalesRepository
             return null;
         }
 
+        if (!order.Status.Equals("Pendiente", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new OrderNotEditableException("Solo se pueden editar pedidos en estado Pendiente.");
+        }
+
         var lines = request.Lines
             .Where(line => !string.IsNullOrWhiteSpace(line.ItemName) && line.Quantity > 0)
             .Select(line => line with { ItemName = line.ItemName.Trim() })
             .ToList();
         var subtotal = lines.Sum(line => line.Quantity * line.UnitPrice);
         var tax = Math.Round(subtotal * TaxRate, 2);
-        var total = subtotal + tax;
+        var deliveryFee = order.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase)
+            ? Math.Max(0, request.DeliveryFee)
+            : 0;
+        var total = subtotal + tax + deliveryFee;
 
         var updated = order with
         {
@@ -276,6 +345,10 @@ public sealed class SalesRepository
             CustomerPhone = request.CustomerPhone.Trim(),
             DeliveryAddress = request.DeliveryAddress.Trim(),
             DeliveryStatus = string.IsNullOrWhiteSpace(request.DeliveryStatus) ? order.DeliveryStatus : request.DeliveryStatus.Trim(),
+            CustomerId = request.CustomerId ?? order.CustomerId,
+            Notes = request.Notes.Trim(),
+            DeliveryReference = request.DeliveryReference.Trim(),
+            DeliveryFee = deliveryFee,
             UpdatedAt = DateTimeOffset.UtcNow
         };
 
@@ -304,6 +377,18 @@ public sealed class SalesRepository
             "DELETE FROM orders_by_id WHERE restaurant_id = ? AND order_id = ?",
             RestaurantId,
             order.OrderId));
+
+        if (order.CustomerId.HasValue && order.CustomerId.Value != Guid.Empty)
+        {
+            await _session.ExecuteAsync(new SimpleStatement("""
+                DELETE FROM orders_by_customer
+                WHERE restaurant_id = ? AND customer_id = ? AND created_at = ? AND order_id = ?
+                """,
+                RestaurantId,
+                order.CustomerId.Value,
+                order.CreatedAt,
+                order.OrderId));
+        }
     }
 
     public async Task<RestaurantOrder?> RegisterPaymentAsync(Guid orderId, RegisterPaymentRequest request)
@@ -314,10 +399,16 @@ public sealed class SalesRepository
             return null;
         }
 
+        if (order.Status.Equals("Pagado", StringComparison.OrdinalIgnoreCase))
+        {
+            return order;
+        }
+
+        var paymentMethod = NormalizePaymentMethod(request.PaymentMethod);
         var updated = order with
         {
             Status = "Pagado",
-            PaymentMethod = string.IsNullOrWhiteSpace(request.PaymentMethod) ? "Efectivo" : request.PaymentMethod.Trim(),
+            PaymentMethod = paymentMethod,
             DeliveryStatus = order.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase) ? "Pagado" : order.DeliveryStatus,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -381,15 +472,66 @@ public sealed class SalesRepository
         return rows.Select(MapInvoice).ToList();
     }
 
+    public async Task<IReadOnlyList<RestaurantOrder>> GetOrdersByCustomerAsync(Guid customerId)
+    {
+        var rows = await _session.ExecuteAsync(new SimpleStatement("""
+            SELECT order_id, business_date, order_kind, table_or_channel, customer_id, customer_name, customer_phone,
+                   delivery_address, delivery_reference, delivery_fee, delivery_status, server_name, status,
+                   payment_method, notes, lines_json, subtotal, tax, total, created_at, updated_at
+            FROM orders_by_customer
+            WHERE restaurant_id = ? AND customer_id = ?
+            """, RestaurantId, customerId));
+        return rows.Select(MapOrder).ToList();
+    }
+
+    public async Task<SalesPeriodReport> GetPeriodReportAsync(string fromDate, string toDate)
+    {
+        if (!DateOnly.TryParse(fromDate, out var from) || !DateOnly.TryParse(toDate, out var to) || to < from)
+        {
+            throw new ArgumentException("El rango de fechas no es valido.");
+        }
+
+        var dailyTotals = new List<DailySalesSummary>();
+        var allMetrics = new List<DishSalesMetric>();
+        for (var date = from; date <= to; date = date.AddDays(1))
+        {
+            var key = date.ToString("yyyy-MM-dd");
+            dailyTotals.Add(await GetSummaryAsync(key));
+            allMetrics.AddRange(await GetDishSalesMetricsAsync(key));
+        }
+
+        var dishes = allMetrics
+            .GroupBy(metric => metric.ItemName, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new DishSalesMetric(
+                group.First().ItemName,
+                group.Sum(metric => metric.Quantity),
+                group.Sum(metric => metric.Total)))
+            .OrderByDescending(metric => metric.Total)
+            .ToList();
+
+        return new SalesPeriodReport(
+            fromDate,
+            toDate,
+            dailyTotals.Sum(item => item.Orders),
+            dailyTotals.Sum(item => item.PaidOrders),
+            dailyTotals.Sum(item => item.Subtotal),
+            dailyTotals.Sum(item => item.Tax),
+            dailyTotals.Sum(item => item.Total),
+            dailyTotals.Sum(item => item.InvoicedTotal),
+            dishes,
+            dailyTotals);
+    }
+
     private async Task SaveOrderAsync(RestaurantOrder order)
     {
         var linesJson = JsonSerializer.Serialize(order.Lines);
 
         await _session.ExecuteAsync(new SimpleStatement("""
             INSERT INTO orders_by_day
-            (restaurant_id, business_date, created_at, order_id, order_kind, table_or_channel, customer_name, customer_phone,
-             delivery_address, delivery_status, server_name, status, payment_method, lines_json, subtotal, tax, total, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (restaurant_id, business_date, created_at, order_id, order_kind, table_or_channel, customer_id, customer_name, customer_phone,
+             delivery_address, delivery_reference, delivery_fee, delivery_status, server_name, status, payment_method, notes,
+             lines_json, subtotal, tax, total, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             RestaurantId,
             order.BusinessDate,
@@ -397,13 +539,17 @@ public sealed class SalesRepository
             order.OrderId,
             order.OrderKind,
             order.TableOrChannel,
+            order.CustomerId,
             order.CustomerName,
             order.CustomerPhone,
             order.DeliveryAddress,
+            order.DeliveryReference,
+            order.DeliveryFee,
             order.DeliveryStatus,
             order.ServerName,
             order.Status,
             order.PaymentMethod,
+            order.Notes,
             linesJson,
             order.Subtotal,
             order.Tax,
@@ -412,9 +558,10 @@ public sealed class SalesRepository
 
         await _session.ExecuteAsync(new SimpleStatement("""
             INSERT INTO orders_by_id
-            (restaurant_id, order_id, business_date, created_at, order_kind, table_or_channel, customer_name, customer_phone,
-             delivery_address, delivery_status, server_name, status, payment_method, lines_json, subtotal, tax, total, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (restaurant_id, order_id, business_date, created_at, order_kind, table_or_channel, customer_id, customer_name, customer_phone,
+             delivery_address, delivery_reference, delivery_fee, delivery_status, server_name, status, payment_method, notes,
+             lines_json, subtotal, tax, total, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             RestaurantId,
             order.OrderId,
@@ -422,18 +569,55 @@ public sealed class SalesRepository
             order.CreatedAt,
             order.OrderKind,
             order.TableOrChannel,
+            order.CustomerId,
             order.CustomerName,
             order.CustomerPhone,
             order.DeliveryAddress,
+            order.DeliveryReference,
+            order.DeliveryFee,
             order.DeliveryStatus,
             order.ServerName,
             order.Status,
             order.PaymentMethod,
+            order.Notes,
             linesJson,
             order.Subtotal,
             order.Tax,
             order.Total,
             order.UpdatedAt));
+
+        if (order.CustomerId.HasValue && order.CustomerId.Value != Guid.Empty)
+        {
+            await _session.ExecuteAsync(new SimpleStatement("""
+                INSERT INTO orders_by_customer
+                (restaurant_id, customer_id, created_at, order_id, business_date, order_kind, table_or_channel,
+                 customer_name, customer_phone, delivery_address, delivery_reference, delivery_fee, delivery_status,
+                 server_name, status, payment_method, notes, lines_json, subtotal, tax, total, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                RestaurantId,
+                order.CustomerId.Value,
+                order.CreatedAt,
+                order.OrderId,
+                order.BusinessDate,
+                order.OrderKind,
+                order.TableOrChannel,
+                order.CustomerName,
+                order.CustomerPhone,
+                order.DeliveryAddress,
+                order.DeliveryReference,
+                order.DeliveryFee,
+                order.DeliveryStatus,
+                order.ServerName,
+                order.Status,
+                order.PaymentMethod,
+                order.Notes,
+                linesJson,
+                order.Subtotal,
+                order.Tax,
+                order.Total,
+                order.UpdatedAt));
+        }
     }
 
     private async Task SavePaymentAsync(RestaurantOrder order, RegisterPaymentRequest request)
@@ -442,7 +626,7 @@ public sealed class SalesRepository
             Guid.NewGuid(),
             order.OrderId,
             order.BusinessDate,
-            string.IsNullOrWhiteSpace(request.PaymentMethod) ? "Efectivo" : request.PaymentMethod.Trim(),
+            NormalizePaymentMethod(request.PaymentMethod),
             order.Total,
             string.IsNullOrWhiteSpace(request.BillingName) ? "Consumidor Final" : request.BillingName.Trim(),
             string.IsNullOrWhiteSpace(request.TaxId) ? "0" : request.TaxId.Trim(),
@@ -520,7 +704,11 @@ public sealed class SalesRepository
             GetOptionalString(row, "customer_name", string.Empty),
             GetOptionalString(row, "customer_phone", string.Empty),
             GetOptionalString(row, "delivery_address", string.Empty),
-            GetOptionalString(row, "delivery_status", string.Empty));
+            GetOptionalString(row, "delivery_status", string.Empty),
+            GetNullableGuid(row, "customer_id"),
+            GetOptionalString(row, "notes", string.Empty),
+            GetOptionalString(row, "delivery_reference", string.Empty),
+            GetOptionalDecimal(row, "delivery_fee"));
     }
 
     private static PaymentRecord MapPayment(Row row)
@@ -572,5 +760,43 @@ public sealed class SalesRepository
         {
             return fallback;
         }
+    }
+
+    private static Guid? GetNullableGuid(Row row, string column)
+    {
+        try
+        {
+            return row.GetValue<Guid?>(column);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static decimal GetOptionalDecimal(Row row, string column)
+    {
+        try
+        {
+            return row.GetValue<decimal>(column);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static string NormalizePaymentMethod(string value)
+    {
+        var allowed = new[] { "Efectivo", "Tarjeta", "Aplicacion de pago", "QR" };
+        return allowed.FirstOrDefault(item => item.Equals(value?.Trim(), StringComparison.OrdinalIgnoreCase))
+            ?? "Efectivo";
+    }
+}
+
+public sealed class OrderNotEditableException : InvalidOperationException
+{
+    public OrderNotEditableException(string message) : base(message)
+    {
     }
 }

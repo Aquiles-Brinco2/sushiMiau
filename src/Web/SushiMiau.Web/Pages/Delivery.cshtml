@@ -25,7 +25,7 @@
             {
                 <tr>
                     <td><strong>@order.CustomerName</strong><br /><span class="muted">@order.CustomerPhone</span></td>
-                    <td>@order.DeliveryAddress</td>
+                    <td>@order.DeliveryAddress<br /><small>@order.DeliveryReference</small></td>
                     <td>@order.ServerName</td>
                     <td>@string.Join(", ", order.Lines.Select(line => $"{line.Quantity}x {line.ItemName}"))</td>
                     <td>@order.PaymentMethod</td>
@@ -34,7 +34,8 @@
                     <td>
                         <form method="post" asp-page-handler="Status" class="inline-actions">
                             <input type="hidden" asp-for="DeliveryStatus.OrderId" value="@order.OrderId" />
-                            <button name="DeliveryStatus.DeliveryStatus" value="Preparando" type="submit">Preparar</button>
+                            <button name="DeliveryStatus.DeliveryStatus" value="En preparacion" type="submit">Preparar</button>
+                            <button name="DeliveryStatus.DeliveryStatus" value="Listo" type="submit">Listo</button>
                             <button name="DeliveryStatus.DeliveryStatus" value="En camino" type="submit">En camino</button>
                             <button name="DeliveryStatus.DeliveryStatus" value="Entregado" type="submit">Entregado</button>
                         </form>
@@ -48,11 +49,15 @@
                             <form method="post" asp-page-handler="Update" class="dialog-body form-box order-form" data-order-form>
                                 <input type="hidden" asp-for="EditOrder.OrderId" value="@order.OrderId" />
                                 <input type="hidden" asp-for="EditOrder.Status" value="@order.Status" />
+                                <input type="hidden" asp-for="EditOrder.CustomerId" value="@order.CustomerId" />
                                 <label>Cliente <input asp-for="EditOrder.CustomerName" value="@order.CustomerName" required /></label>
                                 <label>Telefono <input asp-for="EditOrder.CustomerPhone" value="@order.CustomerPhone" required /></label>
                                 <label>Direccion <input asp-for="EditOrder.DeliveryAddress" value="@order.DeliveryAddress" required /></label>
+                                <label>Referencia <input asp-for="EditOrder.DeliveryReference" value="@order.DeliveryReference" required /></label>
+                                <label>Costo de envio <input asp-for="EditOrder.DeliveryFee" value="@order.DeliveryFee" type="number" min="0" step="0.01" data-delivery-fee /></label>
                                 <label>Operador <input asp-for="EditOrder.ServerName" value="@order.ServerName" required /></label>
                                 <label>Estado entrega <input asp-for="EditOrder.DeliveryStatus" list="deliveryStatuses" value="@order.DeliveryStatus" required /></label>
+                                <label>Observaciones <textarea asp-for="EditOrder.Notes">@order.Notes</textarea></label>
                                 <partial name="_EditableOrderLines" model='(Prefix: "EditOrder", Lines: order.Lines)' />
                                 <div class="order-total-box">
                                     <span>Subtotal <strong data-order-subtotal>Bs @order.Subtotal.ToString("0.00")</strong></span>
@@ -73,10 +78,17 @@
 <dialog id="createDeliveryOrder">
     <div class="dialog-head"><h2>Pedido delivery</h2><button type="button" data-dialog-close>x</button></div>
     <form method="post" asp-page-handler="Create" class="dialog-body form-box order-form" data-order-form>
-        <label>Cliente <input asp-for="DeliveryOrder.CustomerName" list="customers" required /></label>
-        <label>Telefono <input asp-for="DeliveryOrder.CustomerPhone" required /></label>
+        <label>Cliente
+            <select asp-for="DeliveryOrder.CustomerId" required>
+                <option value="">Seleccionar cliente</option>
+                @foreach (var customer in Model.Customers) { <option value="@customer.CustomerId">@customer.Name - @customer.Phone</option> }
+            </select>
+        </label>
         <label>Direccion <input asp-for="DeliveryOrder.DeliveryAddress" required /></label>
-        <label>Operador <input asp-for="DeliveryOrder.ServerName" required /></label>
+        <label>Referencia <input asp-for="DeliveryOrder.DeliveryReference" required /></label>
+        <label>Costo de envio <input asp-for="DeliveryOrder.DeliveryFee" type="number" min="0" step="0.01" value="0" data-delivery-fee /></label>
+        <label>Operador <input value="@Model.OperatorName" disabled /></label>
+        <label>Observaciones <textarea asp-for="DeliveryOrder.Notes" rows="2"></textarea></label>
         <partial name="_DynamicOrderLines" model='(Prefix: "DeliveryOrder", Menu: Model.Menu)' />
         <div class="payment-grid">
             <label>Metodo de pago <input asp-for="DeliveryOrder.PaymentMethod" list="paymentMethods" /></label>
@@ -95,14 +107,8 @@
 <datalist id="menuItems">
     @foreach (var item in Model.Menu)
     {
-        <option value="@item.Name"></option>
+        <option value="@item.Name" data-price="@item.Price.ToString("0.00")"></option>
     }
 </datalist>
-<datalist id="customers">
-    @foreach (var customer in Model.Customers)
-    {
-        <option value="@customer.Name"></option>
-    }
-</datalist>
-<datalist id="paymentMethods"><option value="Pendiente"></option><option value="Efectivo"></option><option value="Tarjeta"></option><option value="QR"></option></datalist>
-<datalist id="deliveryStatuses"><option value="Preparando"></option><option value="En camino"></option><option value="Entregado"></option><option value="Pagado"></option></datalist>
+<datalist id="paymentMethods"><option value="Pendiente"></option><option value="Efectivo"></option><option value="Tarjeta"></option><option value="Aplicacion de pago"></option></datalist>
+<datalist id="deliveryStatuses"><option value="Pendiente"></option><option value="En preparacion"></option><option value="Listo"></option><option value="En camino"></option><option value="Entregado"></option><option value="Cancelado"></option><option value="Pagado"></option></datalist>

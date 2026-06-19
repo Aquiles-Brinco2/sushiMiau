@@ -44,3 +44,53 @@ public sealed record InventorySnapshot(
     int LowStockItems,
     decimal TotalStockUnits,
     IReadOnlyList<InventoryItem> Alerts);
+
+public sealed record Supplier(
+    Guid SupplierId,
+    string Name,
+    string ContactName,
+    string Phone,
+    string Email,
+    string Address,
+    bool IsActive,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record UpsertSupplierRequest(
+    string Name,
+    string ContactName,
+    string Phone,
+    string Email,
+    string Address,
+    bool IsActive);
+
+public sealed record PurchaseOrderLine(
+    Guid InventoryItemId,
+    string IngredientName,
+    decimal Quantity,
+    string Unit,
+    decimal UnitPrice)
+{
+    public decimal Subtotal => Quantity * UnitPrice;
+}
+
+public sealed record PurchaseOrder(
+    Guid PurchaseOrderId,
+    string OrderNumber,
+    Guid SupplierId,
+    string SupplierName,
+    string Status,
+    IReadOnlyList<PurchaseOrderLine> Lines,
+    decimal Total,
+    string Notes,
+    DateTimeOffset OrderedAt,
+    DateTimeOffset? ReceivedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record CreatePurchaseOrderRequest(
+    Guid SupplierId,
+    string SupplierName,
+    IReadOnlyList<PurchaseOrderLine> Lines,
+    string Notes);
+
+public sealed record UpdatePurchaseOrderStatusRequest(string Status, string OperatorName);

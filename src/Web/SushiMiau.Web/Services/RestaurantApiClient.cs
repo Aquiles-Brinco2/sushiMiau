@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Security.Claims;
+using SushiMiau.Shared;
 using SushiMiau.Shared.Contracts;
 
 namespace SushiMiau.Web.Services;
@@ -26,7 +27,7 @@ public sealed class RestaurantApiClient
 
     public async Task<RestaurantDashboard> GetDashboardAsync()
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+        var today = BusinessClock.Today;
 
         var inventorySnapshot = await GetJsonAsync<InventorySnapshot>("Inventory", "/api/inventory/snapshot")
             ?? new InventorySnapshot(0, 0, 0, []);
@@ -55,6 +56,9 @@ public sealed class RestaurantApiClient
 
     public async Task<List<AppUser>> GetUsersAsync() =>
         await GetJsonAsync<List<AppUser>>("Identity", "/api/users", CreateAdminHeaders()) ?? [];
+
+    public Task<List<AppUser>> GetEmployeesAsync() =>
+        GetListAsync<AppUser>("Identity", "/api/employees");
 
     public async Task AddUserAsync(CreateUserRequest request)
     {
@@ -96,6 +100,28 @@ public sealed class RestaurantApiClient
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task AddTableAsync(UpsertRestaurantTableRequest request)
+    {
+        var response = await SendJsonAsync("Operations", HttpMethod.Post, "/api/operations/tables", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UpdateTableAsync(string currentName, UpsertRestaurantTableRequest request)
+    {
+        var response = await SendJsonAsync(
+            "Operations",
+            HttpMethod.Put,
+            $"/api/operations/tables/{Uri.EscapeDataString(currentName)}/details",
+            request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeleteTableAsync(string tableName)
+    {
+        var response = await SendAsync("Operations", HttpMethod.Delete, $"/api/operations/tables/{Uri.EscapeDataString(tableName)}");
+        response.EnsureSuccessStatusCode();
+    }
+
     public Task<List<MenuCategory>> GetMenuCategoriesAsync() =>
         GetListAsync<MenuCategory>("Operations", "/api/operations/menu-categories");
 
@@ -123,14 +149,14 @@ public sealed class RestaurantApiClient
     public async Task<Customer?> AddCustomerAsync(CreateCustomerRequest request)
     {
         var response = await SendJsonAsync("Operations", HttpMethod.Post, "/api/operations/customers", request);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessWithMessageAsync(response);
         return await response.Content.ReadFromJsonAsync<Customer>();
     }
 
     public async Task UpdateCustomerAsync(Guid customerId, UpdateCustomerRequest request)
     {
         var response = await SendJsonAsync("Operations", HttpMethod.Put, $"/api/operations/customers/{customerId}", request);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessWithMessageAsync(response);
     }
 
     public async Task DeleteCustomerAsync(Guid customerId)
@@ -138,6 +164,18 @@ public sealed class RestaurantApiClient
         var response = await SendAsync("Operations", HttpMethod.Delete, $"/api/operations/customers/{customerId}");
         response.EnsureSuccessStatusCode();
     }
+
+    public Task<List<LoyaltyTransaction>> GetLoyaltyTransactionsAsync(Guid customerId) =>
+        GetListAsync<LoyaltyTransaction>("Operations", $"/api/operations/customers/{customerId}/loyalty");
+
+    public async Task AdjustLoyaltyPointsAsync(Guid customerId, AdjustLoyaltyPointsRequest request)
+    {
+        var response = await SendJsonAsync("Operations", HttpMethod.Post, $"/api/operations/customers/{customerId}/loyalty", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public Task<List<RestaurantOrder>> GetOrdersByCustomerAsync(Guid customerId) =>
+        GetListAsync<RestaurantOrder>("Sales", $"/api/sales/orders/customer/{customerId}");
 
     public Task<List<KitchenTicket>> GetTicketsAsync(string businessDate) =>
         GetListAsync<KitchenTicket>("Operations", $"/api/operations/tickets?businessDate={businessDate}");
@@ -218,12 +256,29 @@ public sealed class RestaurantApiClient
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task UpdateShiftAsync(Guid shiftId, UpdateStaffShiftRequest request)
+    {
+        var response = await SendJsonAsync("Operations", HttpMethod.Put, $"/api/operations/shifts/{shiftId}", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeleteShiftAsync(Guid shiftId)
+    {
+        var response = await SendAsync("Operations", HttpMethod.Delete, $"/api/operations/shifts/{shiftId}");
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<RestaurantOrder?> AddOrderAsync(CreateOrderRequest request)
     {
         var response = await SendJsonAsync("Sales", HttpMethod.Post, "/api/sales/orders", request);
         response.EnsureSuccessStatusCode();
         var order = await response.Content.ReadFromJsonAsync<RestaurantOrder>();
         await DiscountInventoryForOrderAsync(order);
+        await CreateKitchenTicketForOrderAsync(order);
+        if (order is not null)
+        {
+            await UpdateTableStateAsync(order.TableOrChannel, new UpdateTableStateRequest("Ocupada", null, order.ServerName));
+        }
         return order;
     }
 
@@ -233,6 +288,7 @@ public sealed class RestaurantApiClient
         response.EnsureSuccessStatusCode();
         var order = await response.Content.ReadFromJsonAsync<RestaurantOrder>();
         await DiscountInventoryForOrderAsync(order);
+        await CreateKitchenTicketForOrderAsync(order);
         return order;
     }
 
@@ -251,7 +307,7 @@ public sealed class RestaurantApiClient
     public async Task UpdateOrderAsync(Guid orderId, UpdateOrderRequest request)
     {
         var response = await SendJsonAsync("Sales", HttpMethod.Put, $"/api/sales/orders/{orderId}", request);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessWithMessageAsync(response);
     }
 
     public async Task DeleteOrderAsync(Guid orderId)
@@ -260,22 +316,44 @@ public sealed class RestaurantApiClient
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task RegisterPaymentAsync(Guid orderId, string paymentMethod, string billingName = "Consumidor Final", string taxId = "0")
+    public async Task<RestaurantOrder?> RegisterPaymentAsync(Guid orderId, string paymentMethod, string billingName = "Consumidor Final", string taxId = "0")
     {
         var response = await SendJsonAsync("Sales", HttpMethod.Patch, $"/api/sales/orders/{orderId}/pay", new RegisterPaymentRequest(paymentMethod, billingName, taxId));
         response.EnsureSuccessStatusCode();
+        var order = await response.Content.ReadFromJsonAsync<RestaurantOrder>();
+        if (order?.CustomerId is { } customerId && customerId != Guid.Empty)
+        {
+            await AdjustLoyaltyPointsAsync(customerId, new AdjustLoyaltyPointsRequest(
+                Math.Max(1, (int)Math.Floor(order.Total / 10m)),
+                "Acumulacion",
+                $"Puntos por pedido {order.OrderId}",
+                order.OrderId));
+        }
+
+        return order;
     }
 
-    public async Task AddReservationAsync(CreateReservationRequest request)
+    public async Task<Reservation?> AddReservationAsync(CreateReservationRequest request)
     {
         var response = await SendJsonAsync("Operations", HttpMethod.Post, "/api/operations/reservations", request);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessWithMessageAsync(response);
+        return await response.Content.ReadFromJsonAsync<Reservation>();
     }
 
     public async Task UpdateReservationStatusAsync(Guid reservationId, string status)
     {
         var response = await SendJsonAsync("Operations", HttpMethod.Patch, $"/api/operations/reservations/{reservationId}/status", new UpdateReservationStatusRequest(status));
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessWithMessageAsync(response);
+    }
+
+    public async Task UpdateReservationOrderAsync(Guid reservationId, Guid? orderId)
+    {
+        var response = await SendJsonAsync(
+            "Operations",
+            HttpMethod.Patch,
+            $"/api/operations/reservations/{reservationId}/order",
+            new UpdateReservationOrderRequest(orderId));
+        await EnsureSuccessWithMessageAsync(response);
     }
 
     public async Task AddNotificationAsync(CreateNotificationRequest request)
@@ -283,6 +361,56 @@ public sealed class RestaurantApiClient
         var response = await SendJsonAsync("Operations", HttpMethod.Post, "/api/operations/notifications", request);
         response.EnsureSuccessStatusCode();
     }
+
+    public Task<List<Supplier>> GetSuppliersAsync() =>
+        GetListAsync<Supplier>("Inventory", "/api/inventory/suppliers");
+
+    public async Task AddSupplierAsync(UpsertSupplierRequest request)
+    {
+        var response = await SendJsonAsync("Inventory", HttpMethod.Post, "/api/inventory/suppliers", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UpdateSupplierAsync(Guid supplierId, UpsertSupplierRequest request)
+    {
+        var response = await SendJsonAsync("Inventory", HttpMethod.Put, $"/api/inventory/suppliers/{supplierId}", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeleteSupplierAsync(Guid supplierId)
+    {
+        var response = await SendAsync("Inventory", HttpMethod.Delete, $"/api/inventory/suppliers/{supplierId}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public Task<List<PurchaseOrder>> GetPurchaseOrdersAsync() =>
+        GetListAsync<PurchaseOrder>("Inventory", "/api/inventory/purchase-orders");
+
+    public async Task AddPurchaseOrderAsync(CreatePurchaseOrderRequest request)
+    {
+        var response = await SendJsonAsync("Inventory", HttpMethod.Post, "/api/inventory/purchase-orders", request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task UpdatePurchaseOrderStatusAsync(Guid purchaseOrderId, string status, string operatorName)
+    {
+        var response = await SendJsonAsync(
+            "Inventory",
+            HttpMethod.Patch,
+            $"/api/inventory/purchase-orders/{purchaseOrderId}/status",
+            new UpdatePurchaseOrderStatusRequest(status, operatorName));
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeletePurchaseOrderAsync(Guid purchaseOrderId)
+    {
+        var response = await SendAsync("Inventory", HttpMethod.Delete, $"/api/inventory/purchase-orders/{purchaseOrderId}");
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<SalesPeriodReport> GetSalesPeriodReportAsync(string fromDate, string toDate) =>
+        await GetJsonAsync<SalesPeriodReport>("Sales", $"/api/sales/reports/period?fromDate={fromDate}&toDate={toDate}")
+        ?? new SalesPeriodReport(fromDate, toDate, 0, 0, 0, 0, 0, 0, [], []);
 
     private async Task<List<T>> GetListAsync<T>(string clientName, string url) =>
         await GetJsonAsync<List<T>>(clientName, url) ?? [];
@@ -315,6 +443,21 @@ public sealed class RestaurantApiClient
                     "Sistema"));
             }
         }
+    }
+
+    private async Task CreateKitchenTicketForOrderAsync(RestaurantOrder? order)
+    {
+        if (order is null)
+        {
+            return;
+        }
+
+        await AddTicketAsync(new CreateKitchenTicketRequest(
+            "Cocina",
+            order.OrderKind.Equals("Delivery", StringComparison.OrdinalIgnoreCase) ? $"Delivery - {order.CustomerName}" : order.TableOrChannel,
+            order.OrderId,
+            order.Lines.Select(line => $"{line.Quantity}x {line.ItemName}").ToList(),
+            order.Notes));
     }
 
     private Dictionary<string, string> CreateAdminHeaders()
@@ -395,7 +538,23 @@ public sealed class RestaurantApiClient
     private static bool IsNameResolutionError(HttpRequestException ex) =>
         ex.InnerException is SocketException socketException
         && socketException.SocketErrorCode is SocketError.HostNotFound or SocketError.NoData or SocketError.TryAgain;
+
+    private static async Task EnsureSuccessWithMessageAsync(HttpResponseMessage response)
+    {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        var error = await response.Content.ReadFromJsonAsync<ApiError>();
+        throw new InvalidOperationException(
+            string.IsNullOrWhiteSpace(error?.Message)
+                ? $"La operacion no pudo completarse ({(int)response.StatusCode})."
+                : error.Message);
+    }
 }
+
+public sealed record ApiError(string Message);
 
 public sealed record RestaurantDashboard(
     InventorySnapshot Inventory,

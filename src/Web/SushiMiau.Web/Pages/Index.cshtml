@@ -24,7 +24,8 @@
         <div class="table-grid">
             @foreach (var table in Model.Tables)
             {
-                <button type="button" class="restaurant-table table-@CssStatus(table.Status)" data-table-target="#table-detail-@Slug(table.TableName)">
+                <button type="button" class="restaurant-table table-@CssStatus(table.Status)"
+                        data-table-target="#table-detail-@Slug(table.TableName)">
                     <strong>@table.TableName</strong>
                     <span>@table.Status</span>
                     @if (table.Status == "Ocupada" && !string.IsNullOrWhiteSpace(table.OrderStatus))
@@ -44,56 +45,87 @@
                         <p class="muted">@table.Capacity personas</p>
                     </header>
                     <dl>
-                        <div><dt>Empleado</dt><dd>@table.AssignedEmployee</dd></div>
-                        <div><dt>Reserva</dt><dd>@ReservationText(table)</dd></div>
-                        <div><dt>Pedido</dt><dd>@OrderText(table)</dd></div>
+                        <div>
+                            <dt>Empleado</dt>
+                            <dd>@table.AssignedEmployee</dd>
+                        </div>
+                        <div>
+                            <dt>Reserva</dt>
+                            <dd>@ReservationText(table)</dd>
+                        </div>
+                        <div>
+                            <dt>Pedidos</dt>
+                            <dd>
+                                @if (!table.PendingOrders.Any())
+                                {
+                                    <span>Sin pedido activo</span>
+                                }
+                                else
+                                {
+                                    <ul class="order-summary-list">
+                                        @foreach (var pending in table.PendingOrders)
+                                        {
+                                            <li>
+                                                <strong>@pending.Status</strong> - Bs @pending.Total.ToString("0.00")
+                                                @if (!string.IsNullOrWhiteSpace(pending.CustomerName))
+                                                {
+                                                    <span class="muted">(@pending.CustomerName)</span>
+                                                }
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </dd>
+                        </div>
                     </dl>
                     <div class="inline-actions">
-                        <a class="secondary-button" asp-page="/Reservas" asp-route-table="@table.TableName">Hacer reserva</a>
-                        <a class="secondary-button" asp-page="/Pedidos" asp-route-table="@table.TableName">Hacer pedido</a>
-                        @if (table.OrderId.HasValue)
-                        {
-                            <a class="secondary-button" asp-page="/Pedidos" asp-fragment="order-@table.OrderId">Detalle pedido</a>
-                        }
-                    </div>
-                    <div class="inline-actions">
-                        @if (table.Status == "Ocupada" || table.Status == "Reservada")
-                        {
-                            <form method="post" asp-page-handler="TableState">
-                                <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
-                                <input type="hidden" asp-for="TableState.Status" value="Disponible" />
-                                <input type="hidden" asp-for="TableState.OrderId" value="@table.OrderId" />
-                                <input type="hidden" asp-for="TableState.ReservationId" value="@table.ReservationId" />
-                                <button type="submit">Desocupar</button>
-                            </form>
-                        }
-                        else if (table.Status == "Fuera de servicio")
-                        {
-                            <form method="post" asp-page-handler="TableState">
-                                <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
-                                <input type="hidden" asp-for="TableState.Status" value="Disponible" />
-                                <button type="submit">Habilitar</button>
-                            </form>
-                        }
-                        else
-                        {
-                            <form method="post" asp-page-handler="TableState">
-                                <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
-                                <input type="hidden" asp-for="TableState.Status" value="Ocupada" />
-                                <button type="submit">Ocupar</button>
-                            </form>
-                            <form method="post" asp-page-handler="TableState">
-                                <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
-                                <input type="hidden" asp-for="TableState.Status" value="Fuera de servicio" />
-                                <button type="submit" class="secondary-button">Fuera de servicio</button>
-                            </form>
-                        }
-                    </div>
-                </article>
-            }
-        </div>
-    </div>
-</section>
+                        <a class="secondary-button" asp-page="/Reservas" asp-route-table="@table.TableName">Hacer
+                            reserva</a>
+                            <a class="secondary-button" asp-page="/Pedidos" asp-route-table="@table.TableName">Hacer pedido</a>
+                            @if (table.OrderId.HasValue)
+                            {
+                                <a class="secondary-button" asp-page="/Pedidos" asp-fragment="order-@table.OrderId">Detalle
+                                    pedido</a>
+                                }
+                            </div>
+                            <div class="inline-actions">
+                                @if (table.Status == "Ocupada" || table.Status == "Reservada")
+                                {
+                                    <form method="post" asp-page-handler="TableState">
+                                        <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
+                                        <input type="hidden" asp-for="TableState.Status" value="Disponible" />
+                                        <input type="hidden" asp-for="TableState.OrderId" value="@table.OrderId" />
+                                        <input type="hidden" asp-for="TableState.ReservationId" value="@table.ReservationId" />
+                                        <button type="submit">Desocupar</button>
+                                    </form>
+                                }
+                                else if (table.Status == "Fuera de servicio")
+                                {
+                                    <form method="post" asp-page-handler="TableState">
+                                        <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
+                                        <input type="hidden" asp-for="TableState.Status" value="Disponible" />
+                                        <button type="submit">Habilitar</button>
+                                    </form>
+                                }
+                                else
+                                {
+                                    <form method="post" asp-page-handler="TableState">
+                                        <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
+                                        <input type="hidden" asp-for="TableState.Status" value="Ocupada" />
+                                        <button type="submit">Ocupar</button>
+                                    </form>
+                                    <form method="post" asp-page-handler="TableState">
+                                        <input type="hidden" asp-for="TableState.TableName" value="@table.TableName" />
+                                        <input type="hidden" asp-for="TableState.Status" value="Fuera de servicio" />
+                                        <button type="submit" class="secondary-button">Fuera de servicio</button>
+                                    </form>
+                                }
+                            </div>
+                        </article>
+                    }
+                </div>
+            </div>
+        </section>
 
 @functions {
     private static string CssStatus(string status) => status switch
@@ -104,7 +136,8 @@
         _ => "available"
     };
 
-    private static string Slug(string value) => value.Replace(" ", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant();
+    private static string Slug(string value) => value.Replace(" ", "-",
+StringComparison.OrdinalIgnoreCase).ToLowerInvariant();
 
     private static string ReservationText(TablePanelItem table)
     {
@@ -118,12 +151,12 @@
 
     private static string OrderText(TablePanelItem table)
     {
-        if (!table.OrderId.HasValue)
+        if (!table.PendingOrders.Any())
         {
             return "Sin pedido activo";
         }
 
-        return $"{table.OrderStatus} - Bs {table.OrderTotal:0.00}";
+        return string.Join(", ", table.PendingOrders.Select(order => $"{order.Status} - Bs {order.Total:0.00}"));
     }
 }
 

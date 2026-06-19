@@ -73,4 +73,46 @@ app.MapPost("/api/inventory/items/{itemId:guid}/movements", async (Guid itemId, 
     return movement is null ? Results.NotFound() : Results.Created($"/api/inventory/items/{itemId}/movements/{movement.MovementId}", movement);
 });
 
+app.MapGet("/api/inventory/suppliers", async (InventoryRepository repo) =>
+    Results.Ok(await repo.GetSuppliersAsync()));
+
+app.MapPost("/api/inventory/suppliers", async (UpsertSupplierRequest request, InventoryRepository repo) =>
+{
+    var supplier = await repo.UpsertSupplierAsync(null, request);
+    return Results.Created($"/api/inventory/suppliers/{supplier.SupplierId}", supplier);
+});
+
+app.MapPut("/api/inventory/suppliers/{supplierId:guid}", async (Guid supplierId, UpsertSupplierRequest request, InventoryRepository repo) =>
+    Results.Ok(await repo.UpsertSupplierAsync(supplierId, request)));
+
+app.MapDelete("/api/inventory/suppliers/{supplierId:guid}", async (Guid supplierId, InventoryRepository repo) =>
+{
+    await repo.DeleteSupplierAsync(supplierId);
+    return Results.NoContent();
+});
+
+app.MapGet("/api/inventory/purchase-orders", async (InventoryRepository repo) =>
+    Results.Ok(await repo.GetPurchaseOrdersAsync()));
+
+app.MapPost("/api/inventory/purchase-orders", async (CreatePurchaseOrderRequest request, InventoryRepository repo) =>
+{
+    var order = await repo.CreatePurchaseOrderAsync(request);
+    return Results.Created($"/api/inventory/purchase-orders/{order.PurchaseOrderId}", order);
+});
+
+app.MapPatch("/api/inventory/purchase-orders/{purchaseOrderId:guid}/status", async (
+    Guid purchaseOrderId,
+    UpdatePurchaseOrderStatusRequest request,
+    InventoryRepository repo) =>
+{
+    var order = await repo.UpdatePurchaseOrderStatusAsync(purchaseOrderId, request);
+    return order is null ? Results.NotFound() : Results.Ok(order);
+});
+
+app.MapDelete("/api/inventory/purchase-orders/{purchaseOrderId:guid}", async (Guid purchaseOrderId, InventoryRepository repo) =>
+{
+    await repo.DeletePurchaseOrderAsync(purchaseOrderId);
+    return Results.NoContent();
+});
+
 app.Run();

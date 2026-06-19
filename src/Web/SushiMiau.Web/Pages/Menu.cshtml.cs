@@ -133,6 +133,11 @@ public sealed class MenuModel : PageModel
             CreateIngredient(form.Ingredient3Name, form.Ingredient3Quantity)
         }.Where(ingredient => ingredient is not null).Cast<MenuIngredient>().ToList();
 
+        if (ingredients.Count == 0)
+        {
+            throw new InvalidOperationException("Agregue al menos un ingrediente del inventario.");
+        }
+
         return new UpsertMenuItemRequest(
             form.Name,
             form.Category,

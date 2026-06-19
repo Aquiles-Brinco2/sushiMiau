@@ -1,22 +1,21 @@
 @model (string Prefix, IReadOnlyList<SushiMiau.Shared.Contracts.MenuItem> Menu)
 
 <div class="order-lines" data-lines-container data-line-prefix="@Model.Prefix">
-    <div class="line-grid order-line-grid line-grid-head"><span>Producto</span><span>Cant.</span><span>Precio</span><span>Total</span><span></span></div>
-    <div class="line-grid order-line-grid" data-line-row>
-        <select name="@($"{Model.Prefix}.Lines[0].ItemName")" required data-menu-select>
-            <option value="">Producto</option>
+    <div class="line-grid optional-line-grid line-grid-head"><span>Producto</span><span>Cant.</span><span>Precio</span><span></span></div>
+    <div class="line-grid optional-line-grid" data-line-row>
+        <select name="@($"{Model.Prefix}.Lines[0].ItemName")" data-menu-select>
+            <option value="">Sin pedido asociado</option>
             @foreach (var item in Model.Menu.Where(item => item.IsAvailable))
             {
                 <option value="@item.Name" data-price="@item.Price.ToString("0.00")">@item.Name</option>
             }
         </select>
-        <input name="@($"{Model.Prefix}.Lines[0].Quantity")" type="number" min="1" value="1" required data-line-quantity />
+        <input name="@($"{Model.Prefix}.Lines[0].Quantity")" type="number" min="1" value="1" data-line-quantity />
         <input name="@($"{Model.Prefix}.Lines[0].UnitPrice")" type="number" step="0.01" value="0.00" readonly data-line-price />
-        <input type="number" step="0.01" value="0.00" readonly data-line-total placeholder="Total" />
         <button type="button" class="danger-button line-remove-button" data-remove-order-line>Quitar</button>
     </div>
     <template data-line-template>
-        <div class="line-grid order-line-grid" data-line-row>
+        <div class="line-grid optional-line-grid" data-line-row>
             <select required data-menu-select>
                 <option value="">Producto</option>
                 @foreach (var item in Model.Menu.Where(item => item.IsAvailable))
@@ -26,9 +25,8 @@
             </select>
             <input type="number" min="1" value="1" required data-line-quantity />
             <input type="number" step="0.01" value="0.00" readonly data-line-price />
-            <input type="number" step="0.01" value="0.00" readonly data-line-total placeholder="Total" />
             <button type="button" class="danger-button line-remove-button" data-remove-order-line>Quitar</button>
         </div>
     </template>
-    <button type="button" class="secondary-button add-line-button" data-add-order-line>Añadir producto</button>
+    <button type="button" class="secondary-button add-line-button" data-add-order-line>Añadir otro producto</button>
 </div>

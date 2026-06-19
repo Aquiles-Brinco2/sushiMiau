@@ -18,7 +18,7 @@
 <section class="panel">
     <div class="table-wrap">
         <table>
-            <thead><tr><th>Nombre</th><th>Telefono</th><th>NIT/CI</th><th>Creado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Telefono</th><th>NIT/CI</th><th>Puntos</th><th>Creado</th><th>Acciones</th></tr></thead>
             <tbody>
             @foreach (var customer in Model.Customers)
             {
@@ -26,8 +26,10 @@
                     <td><strong>@customer.Name</strong></td>
                     <td>@customer.Phone</td>
                     <td>@customer.Nit</td>
+                    <td><span class="badge">@customer.LoyaltyPoints pts</span></td>
                     <td>@customer.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
                     <td class="inline-actions">
+                        <a class="secondary-button" asp-page="/Clientes" asp-route-customerId="@customer.CustomerId">Historial</a>
                         <button type="button" class="secondary-button" data-dialog-open="#edit-customer-@customer.CustomerId">Editar</button>
                         <form method="post" asp-page-handler="Delete" data-confirm="Esta seguro?">
                             <input type="hidden" asp-for="Delete.Id" value="@customer.CustomerId" />
@@ -40,6 +42,52 @@
         </table>
     </div>
 </section>
+
+@if (Model.SelectedCustomer is not null)
+{
+    <section class="workspace-grid">
+        <div class="panel">
+            <div class="panel-heading">
+                <div><h2>Fidelizacion</h2><p>@Model.SelectedCustomer.Name</p></div>
+                <span class="total-pill">@Model.SelectedCustomer.LoyaltyPoints puntos</span>
+            </div>
+            <form method="post" asp-page-handler="Loyalty" class="form-box">
+                <input type="hidden" asp-for="Loyalty.CustomerId" value="@Model.SelectedCustomer.CustomerId" />
+                <label>Movimiento <select asp-for="Loyalty.MovementType"><option>Canje</option><option>Acumulacion</option></select></label>
+                <label>Puntos <input asp-for="Loyalty.Points" type="number" min="1" required /></label>
+                <label>Motivo <input asp-for="Loyalty.Reason" required /></label>
+                <button type="submit">Registrar movimiento</button>
+            </form>
+            <div class="shift-list">
+                @foreach (var movement in Model.LoyaltyTransactions.Take(8))
+                {
+                    <article><strong>@(movement.Points > 0 ? "+" : "")@movement.Points puntos</strong><span>@movement.MovementType</span><small>@movement.Reason</small></article>
+                }
+            </div>
+        </div>
+        <div class="panel wide">
+            <div class="panel-heading"><h2>Historial de pedidos</h2></div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Fecha</th><th>Tipo</th><th>Pedido</th><th>Estado</th><th>Pago</th><th>Total</th></tr></thead>
+                    <tbody>
+                    @foreach (var order in Model.CustomerOrders)
+                    {
+                        <tr>
+                            <td>@order.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@order.OrderKind</td>
+                            <td>@string.Join(", ", order.Lines.Select(line => $"{line.Quantity}x {line.ItemName}"))</td>
+                            <td><span class="badge">@order.Status</span></td>
+                            <td>@order.PaymentMethod</td>
+                            <td>Bs @order.Total.ToString("0.00")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+}
 
 <dialog id="createCustomer">
     <div class="dialog-head"><h2>Registrar cliente</h2><button type="button" data-dialog-close>×</button></div>

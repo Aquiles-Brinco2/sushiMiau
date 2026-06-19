@@ -38,6 +38,9 @@ app.MapGet("/api/users", async (HttpContext context, IdentityRepository repo) =>
     return Results.Ok(await repo.GetUsersAsync());
 });
 
+app.MapGet("/api/employees", async (IdentityRepository repo) =>
+    Results.Ok((await repo.GetUsersAsync()).Where(user => user.IsActive)));
+
 app.MapGet("/api/users/{userId:guid}", async (Guid userId, HttpContext context, IdentityRepository repo) =>
 {
     if (!IsAdmin(context))

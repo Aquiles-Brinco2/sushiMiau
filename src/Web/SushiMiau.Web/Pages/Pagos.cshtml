@@ -15,68 +15,135 @@
 </section>
 
 <section class="metric-grid">
-    <article class="metric-card"><span>Cobrado</span><strong>Bs @Model.Summary.Total.ToString("0.00")</strong><small>@Model.Summary.PaidOrders pedidos pagados</small></article>
-    <article class="metric-card"><span>Facturado</span><strong>Bs @Model.Summary.InvoicedTotal.ToString("0.00")</strong><small>@Model.Invoices.Count facturas</small></article>
-    <article class="metric-card"><span>Pendientes</span><strong>@Model.OpenOrders.Count</strong><small>Pedidos por cobrar</small></article>
-</section>
+    <article class="metric-card"><span>Cobrado</span><strong>Bs
+        @Model.Summary.Total.ToString("0.00")</strong><small>@Model.Summary.PaidOrders pedidos pagados</small>
+    </article>
+    <article class="metric-card"><span>Facturado</span><strong>Bs
+        @Model.Summary.InvoicedTotal.ToString("0.00")</strong><small>@Model.Invoices.Count facturas</small>
+    </article>
+    <article class="metric-card"><span>Pendientes</span><strong>@Model.OpenOrders.Count</strong><small>Pedidos por
+        cobrar</small></article>
+    </section>
 
-<section class="workspace-grid">
-    <div class="panel wide">
-        <div class="panel-heading"><h2>Pedidos pendientes de cobro</h2></div>
-        <div class="table-wrap">
-            <table>
-                <thead><tr><th>Pedido</th><th>Tipo</th><th>Total</th><th>Facturacion</th><th>Cobrar</th></tr></thead>
-                <tbody>
-                @foreach (var order in Model.OpenOrders)
+    <section class="toolbar">
+        @if (Model.ShowHistory)
+        {
+            <a class="secondary-button" asp-page="/Pagos">Volver a cobros</a>
+        }
+        else
+        {
+            <a class="secondary-button" asp-page="/Pagos" asp-route-showHistory="true">Ver historial de pagos</a>
+        }
+    </section>
+
+    <section class="workspace-grid">
+        <div class="panel wide">
+            <div class="panel-heading">
+                <h2>Pedidos pendientes de cobro</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Pedido</th>
+                            <th>Tipo</th>
+                            <th>Total</th>
+                            <th>Facturacion</th>
+                            <th>Cobrar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var order in Model.OpenOrders)
+                        {
+                            <tr>
+                                <td><strong>@order.TableOrChannel</strong><br /><span class="muted">@order.CustomerName</span>
+                                </td>
+                                <td>@order.OrderKind</td>
+                                <td>Bs @order.Total.ToString("0.00")</td>
+                                <td>
+                                    <form method="post" asp-page-handler="Pay" class="inline-edit">
+                                        <input type="hidden" asp-for="Payment.OrderId" value="@order.OrderId" />
+                                        <input asp-for="Payment.PaymentMethod" list="paymentMethods" />
+                                        <input asp-for="Payment.BillingName" placeholder="Razon social" />
+                                        <input asp-for="Payment.TaxId" placeholder="NIT/CI" />
+                                        <button type="submit">Cobrar</button>
+                                    </form>
+                                </td>
+                                <td><span class="badge alert-badge">Pendiente</span></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-heading">
+                <h2>Pagos recientes</h2>
+            </div>
+            <div class="shift-list">
+                @foreach (var payment in Model.Payments)
                 {
-                    <tr>
-                        <td><strong>@order.TableOrChannel</strong><br /><span class="muted">@order.CustomerName</span></td>
-                        <td>@order.OrderKind</td>
-                        <td>Bs @order.Total.ToString("0.00")</td>
-                        <td>
-                            <form method="post" asp-page-handler="Pay" class="inline-edit">
-                                <input type="hidden" asp-for="Payment.OrderId" value="@order.OrderId" />
-                                <input asp-for="Payment.PaymentMethod" list="paymentMethods" />
-                                <input asp-for="Payment.BillingName" placeholder="Razon social" />
-                                <input asp-for="Payment.TaxId" placeholder="NIT/CI" />
-                                <button type="submit">Cobrar</button>
-                            </form>
-                        </td>
-                        <td><span class="badge alert-badge">Pendiente</span></td>
-                    </tr>
+                    <article>
+                        <strong>Bs @payment.Amount.ToString("0.00")</strong>
+                        <span>@payment.PaymentMethod - @payment.BillingName</span>
+                        <small>@payment.PaidAt.ToLocalTime().ToString("HH:mm")</small>
+                    </article>
                 }
-                </tbody>
-            </table>
+            </div>
         </div>
-    </div>
 
-    <div class="panel">
-        <div class="panel-heading"><h2>Pagos recientes</h2></div>
-        <div class="shift-list">
-            @foreach (var payment in Model.Payments)
-            {
-                <article>
-                    <strong>Bs @payment.Amount.ToString("0.00")</strong>
-                    <span>@payment.PaymentMethod - @payment.BillingName</span>
-                    <small>@payment.PaidAt.ToLocalTime().ToString("HH:mm")</small>
-                </article>
-            }
+        <div class="panel">
+            <div class="panel-heading">
+                <h2>Facturas</h2>
+            </div>
+            <div class="shift-list">
+                @foreach (var invoice in Model.Invoices)
+                {
+                    <article>
+                        <strong>@invoice.InvoiceNumber</strong>
+                        <span>@invoice.BillingName - @invoice.TaxId</span>
+                        <small>Bs @invoice.Total.ToString("0.00")</small>
+                    </article>
+                }
+            </div>
         </div>
-    </div>
+    </section>
 
-    <div class="panel">
-        <div class="panel-heading"><h2>Facturas</h2></div>
-        <div class="shift-list">
-            @foreach (var invoice in Model.Invoices)
-            {
-                <article>
-                    <strong>@invoice.InvoiceNumber</strong>
-                    <span>@invoice.BillingName - @invoice.TaxId</span>
-                    <small>Bs @invoice.Total.ToString("0.00")</small>
-                </article>
-            }
-        </div>
-    </div>
-</section>
+    @if (Model.ShowHistory)
+    {
+        <section class="panel">
+            <div class="panel-heading">
+                <h2>Historial de pagos</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Monto</th>
+                            <th>Metodo</th>
+                            <th>Facturado a</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var payment in Model.Payments)
+                        {
+                            <tr>
+                                <td>@payment.PaidAt.ToLocalTime().ToString("HH:mm")</td>
+                                <td>Bs @payment.Amount.ToString("0.00")</td>
+                                <td>@payment.PaymentMethod</td>
+                                <td>@payment.BillingName</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
 
-<datalist id="paymentMethods"><option value="Efectivo"></option><option value="Tarjeta"></option><option value="QR"></option></datalist>
+    <datalist id="paymentMethods">
+        <option value="Efectivo"></option>
+        <option value="Tarjeta"></option>
+        <option value="Aplicacion de pago"></option>
+    </datalist>

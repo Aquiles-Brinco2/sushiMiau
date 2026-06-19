@@ -1,0 +1,58 @@
+@page
+@model CocinaModel
+@{
+    ViewData["Title"] = "Cocina";
+}
+
+<partial name="_Flash" model="(Model.Flash, Model.ErrorMessage)" />
+
+<section class="module-heading">
+    <div>
+        <p class="eyebrow">Produccion</p>
+        <h1>Comandas de cocina</h1>
+        <p class="muted">Pedidos enviados automáticamente desde mesa y delivery.</p>
+    </div>
+    <div class="inline-actions">
+        <form method="get" class="inline-actions">
+            <input type="date" name="date" value="@Model.FilterDate" />
+            <button type="submit">Consultar</button>
+        </form>
+        @if (Model.ShowHistory)
+        {
+            <a class="secondary-button" asp-page="/Cocina" asp-route-date="@Model.FilterDate">Ver cocina</a>
+        }
+        else
+        {
+            <a class="secondary-button" asp-page="/Cocina" asp-route-showHistory="true"
+               asp-route-date="@Model.FilterDate">Historial</a>
+        }
+    </div>
+</section>
+
+<section class="kitchen-board">
+    @foreach (var ticket in Model.Tickets)
+    {
+        <article class="ticket">
+            <header>
+                <span class="badge">@ticket.Status</span>
+                <h2>@ticket.TableOrChannel</h2>
+                <small>@ticket.CreatedAt.ToLocalTime().ToString("HH:mm")</small>
+            </header>
+            <ul>
+                @foreach (var item in ticket.Items)
+                {
+                    <li>@item</li>
+                }
+            </ul>
+            @if (!string.IsNullOrWhiteSpace(ticket.Notes))
+            {
+                <p class="muted">@ticket.Notes</p>
+            }
+            <form method="post" asp-page-handler="Status" class="inline-actions">
+                <input type="hidden" asp-for="TicketStatus.TicketId" value="@ticket.TicketId" />
+                <input type="hidden" asp-for="TicketStatus.OrderId" value="@(ticket.OrderId?.ToString() ?? string.Empty)" />
+                <button name="TicketStatus.Status" value="Listo" type="submit">Listo</button>
+            </form>
+        </article>
+    }
+</section>
